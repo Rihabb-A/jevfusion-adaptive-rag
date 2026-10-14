@@ -10,3 +10,11 @@ pytest>=8.0
 # Two examples of what teams have added past this line in prior terms:
 #   google-genai>=2.3.0   # Gemini access, this course's own lecture default
 #   mem0ai>=0.1           # a Memory-topic team building on Mem0
+
+# DAT baseline (Hsu & Tzeng, 2025). Embeddings and the LLM judge are called
+# over HTTP through OpenRouter, Jev over HTTP through TypeSafe, so no
+# provider SDK is needed.
+numpy>=1.26
+rank-bm25>=0.2.2        # BM25Okapi, DAT's sparse retriever
+requests>=2.31          # SQuAD download, OpenRouter and Jev APIs
+tqdm>=4.66

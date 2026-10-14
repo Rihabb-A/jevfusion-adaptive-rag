@@ -15,6 +15,7 @@ venv/
 # Local data and scratch
 data/*
 !data/README.md
+!data/squad_sample_manifest.json
 *.db
 *.sqlite3
 
