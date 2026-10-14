@@ -1,0 +1,7 @@
+set,subset,method,n_queries,p_at_1,mrr_at_20,alpha_acc,paper_p_at_1,paper_mrr_at_20,paper_alpha_acc
+test,all,BM25 only (alpha=0.0),2996,0.7610,0.8289,0.7894,0.7594,0.8223,0.7981
+test,hybrid,BM25 only (alpha=0.0),1056,0.3494,0.5288,0.4025,0.3906,0.5420,0.4590
+test,all,Dense only (alpha=1.0),2996,0.7730,0.8489,0.8194,0.7396,0.8119,0.7789
+test,hybrid,Dense only (alpha=1.0),1056,0.3835,0.5855,0.4877,0.3375,0.5143,0.4077
+test,all,Fixed hybrid (alpha=0.6),2996,0.8571,0.9087,0.8975,0.8461,0.8997,0.8975
+test,hybrid,Fixed hybrid (alpha=0.6),1056,0.6222,0.7554,0.7093,0.6229,0.7493,0.7255
