@@ -5,8 +5,18 @@ from baseline.evaluate import (
     gold_ranks,
     hybrid_sensitive,
     mrr_at_k,
+    paired_bootstrap_ci,
     precision_at_1,
 )
+
+
+def test_paired_bootstrap_ci():
+    same = np.array([1, 0, 1, 1, 0])
+    assert paired_bootstrap_ci(same, same, n_boot=200) == (0.0, 0.0, 0.0)
+    better = np.ones(1000)
+    worse = np.r_[np.ones(900), np.zeros(100)]
+    mean, low, high = paired_bootstrap_ci(better, worse, n_boot=2000)
+    assert mean == 0.1 and 0 < low < 0.1 < high
 
 
 def test_gold_ranks_break_ties_by_corpus_order():

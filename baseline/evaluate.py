@@ -17,8 +17,10 @@ Ties are broken by corpus order (a stable sort), so ranks are deterministic.
 
     python -m baseline.evaluate                   # free baselines
     python -m baseline.evaluate --tune-alpha      # also grid-search alpha* on the tune set
+    python -m baseline.evaluate --dat             # add DAT from cached judge replies
 
-Writes results/baseline_checkpoint.csv.
+Writes results/baseline_checkpoint.csv, or results/dat_reproduction.csv
+with --dat (plus a paired DAT-vs-fixed bootstrap comparison).
 """
 
 import argparse
@@ -28,11 +30,13 @@ from pathlib import Path
 import numpy as np
 
 from baseline.dat_fusion import fuse, minmax
+from baseline.dat_judge import dat_alphas
 from baseline.prepare_squad import load_set
 from baseline.retrieve import load_scores
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "results" / "baseline_checkpoint.csv"
+OUT_DAT = ROOT / "results" / "dat_reproduction.csv"
 ALPHAS = np.round(np.arange(0.0, 1.0001, 0.1), 1)
 
 # Transcribed from the DAT paper (arXiv:2503.23013v1), SQuAD columns.
@@ -93,6 +97,37 @@ def alpha_selection_accuracy(grid_ranks, chosen_alpha, alphas=ALPHAS):
     column = np.array([int(np.argmin(np.abs(alphas - a))) for a in chosen])
     best = grid_ranks.min(axis=1)
     return float(np.mean(grid_ranks[np.arange(len(column)), column] == best))
+
+
+def paired_bootstrap_ci(values_a, values_b, n_boot=10000, seed=0, chunk=500):
+    """Mean of (a - b) over the same queries, with a 95% percentile
+    bootstrap interval from resampling queries with replacement."""
+    diff = np.asarray(values_a, dtype=np.float64) - np.asarray(values_b, dtype=np.float64)
+    rng = np.random.default_rng(seed)
+    means = []
+    for start in range(0, n_boot, chunk):
+        idx = rng.integers(0, len(diff), size=(min(chunk, n_boot - start), len(diff)))
+        means.append(diff[idx].mean(axis=1))
+    means = np.concatenate(means)
+    return float(diff.mean()), float(np.percentile(means, 2.5)), float(np.percentile(means, 97.5))
+
+
+def paired_comparison(set_name, alpha_a, alpha_b, name_a, name_b):
+    """Per-query P@1 and RR@20 of two methods on the same questions."""
+    norm_dense, norm_bm25, gold_index = load_normalized(set_name)
+    ranks_a = gold_ranks(fuse(norm_dense, norm_bm25, alpha_a), gold_index)
+    ranks_b = gold_ranks(fuse(norm_dense, norm_bm25, alpha_b), gold_index)
+    hit_a, hit_b = ranks_a == 1, ranks_b == 1
+    print(f"\n== Paired comparison on the same {len(gold_index)} questions: {name_a} minus {name_b} ==")
+    for metric, a, b in (
+        ("P@1", hit_a, hit_b),
+        ("MRR@20", np.where(ranks_a <= 20, 1.0 / ranks_a, 0.0), np.where(ranks_b <= 20, 1.0 / ranks_b, 0.0)),
+    ):
+        mean, low, high = paired_bootstrap_ci(a, b)
+        verdict = "significant" if low > 0 or high < 0 else "not significant"
+        print(f"  {metric:<7} {mean:+.4f}  95% CI [{low:+.4f}, {high:+.4f}]  ({verdict}, 10,000 bootstrap resamples)")
+    print(f"  #1 gained by {name_a}: {int((hit_a & ~hit_b).sum())} questions, "
+          f"lost: {int((~hit_a & hit_b).sum())}, unchanged: {int((hit_a == hit_b).sum())}")
 
 
 def load_normalized(set_name):
@@ -168,6 +203,7 @@ def write_csv(rows, path=OUT):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--tune-alpha", action="store_true", help="also grid-search alpha* on the tune set")
+    parser.add_argument("--dat", action="store_true", help="add DAT (GPT-4o-mini) from cached judge replies")
     args = parser.parse_args()
 
     methods = {
@@ -179,9 +215,13 @@ def main():
         best = tune_alpha("tune")
         if best != 0.6:
             methods[f"Fixed hybrid (tuned alpha={best:.1f})"] = best
+    if args.dat:
+        methods["DAT (GPT-4o-mini)"] = np.array([row["alpha"] for row in dat_alphas("test")])
     rows = evaluate("test", methods)
     print_table(rows)
-    write_csv(rows)
+    write_csv(rows, OUT_DAT if args.dat else OUT)
+    if args.dat:
+        paired_comparison("test", methods["DAT (GPT-4o-mini)"], 0.6, "DAT (GPT-4o-mini)", "Fixed 0.6")
 
 
 if __name__ == "__main__":
