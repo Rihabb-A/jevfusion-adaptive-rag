@@ -1,0 +1,6 @@
+set,method,n_queries,p_at_1,mrr_at_20,alpha_acc,hybrid_p_at_1,hybrid_mrr_at_20,n_hybrid
+test,BM25 only (alpha=0.0),2996,0.7610,0.8289,0.7894,0.3494,0.5288,1056
+test,Dense only (alpha=1.0),2996,0.7730,0.8489,0.8194,0.3835,0.5855,1056
+test,Fixed hybrid (alpha=0.6),2996,0.8571,0.9087,0.8975,0.6222,0.7554,1056
+test,DAT (GPT-4o-mini),2996,0.8735,0.9167,0.9169,0.6686,0.7779,1056
+test,Jev J1 (top_level),2996,0.8899,0.9268,0.9356,0.7150,0.8067,1056

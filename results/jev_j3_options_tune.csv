@@ -1,0 +1,6 @@
+set,method,n_queries,p_at_1,mrr_at_20,alpha_acc,hybrid_p_at_1,hybrid_mrr_at_20,n_hybrid
+tune,Fixed hybrid (alpha=0.6),2865,0.7962,0.8611,0.8457,0.5726,0.7058,1315
+tune,"Jev J1 (top_level), reference",2865,0.8363,0.8852,0.8991,0.6601,0.7582,1315
+tune,Jev J3 A_mean_dat,2865,0.8098,0.8719,0.8691,0.6023,0.7292,1315
+tune,Jev J3 B_smooth,2865,0.8126,0.8733,0.8621,0.6084,0.7323,1315
+tune,Jev J3 C_rank_weighted_dat,2865,0.8147,0.8757,0.8789,0.6129,0.7376,1315
