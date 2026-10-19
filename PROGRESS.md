@@ -1177,6 +1177,8 @@ calculation is shown in the test.
 byte-identical to the N1 backup; `git diff` shows no change in
 `baseline/`, `results/` or the existing extension modules.
 
+**Git (N2):** commit `34c1f89` on `extension/nfcorpus` (not pushed).
+
 **Tests:** **87 passed** (77 existing + 10 new). **Cost:** $0. **Project
 total: $1.383 of $20** (unchanged).
 
