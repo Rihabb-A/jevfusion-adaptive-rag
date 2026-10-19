@@ -451,10 +451,85 @@ def j1_analysis():
     return j1_alpha, per
 
 
+def better_retriever_agreement(alphas_by_judge, per_zero):
+    """Target that suits multiple relevance: the retriever whose own ranking
+    has the higher nDCG@10 for the query. Share of alphas leaning toward it
+    (queries where the two retrievers differ)."""
+    d, b = per_zero["Dense only"]["ndcg@10"], per_zero["BM25 only"]["ndcg@10"]
+    differ = ~np.isclose(d, b)
+    want_dense = d > b
+    print(f"\n== Alpha vs the retriever that ranks better on its own (by nDCG@10; {int(differ.sum())} queries "
+          f"where they differ: dense better {int((differ & want_dense).sum())}, BM25 better {int((differ & ~want_dense).sum())}) ==")
+    for judge, a in alphas_by_judge.items():
+        right = np.where(want_dense, a > 0.5, a < 0.5)[differ]
+        neutral = np.isclose(a, 0.5)[differ]
+        bm_better = (differ & ~want_dense)
+        print(f"  {judge:<10} toward the better retriever {right.mean():.1%}, neutral {neutral.mean():.1%}, wrong {(~right & ~neutral).mean():.1%}; "
+              f"when BM25 is better: toward BM25 {np.mean(a[bm_better] < 0.5):.1%}, mean alpha {a[bm_better].mean():.3f}")
+
+
+def j3_analysis():
+    """N8: Jev J3 (top-3 per retriever, option C) on NFCorpus test."""
+    from extension.nfcorpus_judges import dat_alphas_nf, jev_alphas_nf, jev_candidates
+    dat_alpha, _ = dat_alphas_nf(TEST)
+    j1_alpha, _ = jev_alphas_nf(TEST, 1)
+    j3_alpha, judgments = jev_alphas_nf(TEST, 3)
+    per_zero = zero_judge_per_query()
+    per_dat, per_j1 = per_query_for_alpha(TEST, dat_alpha), per_query_for_alpha(TEST, j1_alpha)
+    per = judge_quality("Jev J3", j3_alpha, per_zero, extra={"Jev J1": per_j1, "DAT (GPT-4o-mini)": per_dat})
+    alpha_report(j3_alpha)
+    groups, d_grade, b_grade, rows = top1_groups()
+    print_groups({"Jev J3": per, "Jev J1": per_j1, "DAT": per_dat, "Dense only": per_zero["Dense only"],
+                  "Fixed 0.8 (dev)": per_zero["Fixed 0.8 (dev)"]}, groups)
+    print_direction({"DAT": dat_alpha, "Jev J1": j1_alpha, "Jev J3": j3_alpha}, groups)
+    better_retriever_agreement({"DAT": dat_alpha, "Jev J1": j1_alpha, "Jev J3": j3_alpha}, per_zero)
+
+    _, qs, qrels = load_split(TEST)
+    cands = jev_candidates(TEST, 3)
+    grade = {m: np.array([[qrels[c["query_id"]].get(p["id"], 0) for p in c["passages"] if p["method"] == m] for c in cands])
+             for m in ("dense", "bm25")}
+    level = {m: np.array([[j[f"{m}_{r}"]["top_level"] for r in (1, 2, 3)] for j in judgments]) for m in ("dense", "bm25")}
+    print("\n== Multiple relevance inside each retriever's top-3 (test) ==")
+    for m in ("dense", "bm25"):
+        rel = grade[m] >= 1
+        first = rel[:, 0]
+        print(f"  {m:<5}: relevant at #1 {rel[:, 0].mean():.1%}, #2 {rel[:, 1].mean():.1%}, #3 {rel[:, 2].mean():.1%}; "
+              f"mean relevant in top-3 {rel.sum(axis=1).mean():.2f}")
+        print(f"         when #1 relevant: #2 relevant {rel[first, 1].mean():.1%}, #3 {rel[first, 2].mean():.1%}  "
+              f"| Jev levels #1/#2/#3 {level[m][first].mean(axis=0).round(2).tolist()}")
+        print(f"         when #1 not relevant: #2 relevant {rel[~first, 1].mean():.1%}, #3 {rel[~first, 2].mean():.1%}  "
+              f"| Jev levels #1/#2/#3 {level[m][~first].mean(axis=0).round(2).tolist()}")
+    print("  Jev level by official grade, all 6 judged documents: " + ", ".join(
+        f"grade {g}: {np.concatenate([level[m][grade[m] == g] for m in level]).mean():.2f}" for g in (0, 1, 2)))
+    rubric_alignment([(lv, g) for m in level for lv, g in zip(level[m].ravel(), grade[m].ravel())], "Jev J3, all 6 documents")
+
+    n_rel = np.array([sum(g >= 1 for g in qrels[c["query_id"]].values()) for c in cands])
+    diff = per["ndcg@10"] - per_j1["ndcg@10"]
+    print("\n== J3 vs J1 by number of relevant documents (mean nDCG@10) ==")
+    for label, mask in (("1-5 relevant", n_rel <= 5), ("6-30", (n_rel > 5) & (n_rel <= 30)), ("31+", n_rel > 30)):
+        print(f"  {label:<14} n={int(mask.sum()):>3}  J3 {per['ndcg@10'][mask].mean():.4f}  J1 {per_j1['ndcg@10'][mask].mean():.4f}  "
+              f"J3 better {np.sum(diff[mask] > 1e-12):>3}, worse {np.sum(diff[mask] < -1e-12):>3}")
+    top3_rel = {m: (grade[m] >= 1).sum(axis=1) for m in grade}
+    more_bm25 = top3_rel["bm25"] > top3_rel["dense"]
+    more_dense = top3_rel["dense"] > top3_rel["bm25"]
+    print(f"\n== Does J3 follow how many of the top-3 are relevant? ==")
+    for label, mask in (("BM25 has more relevant in top-3", more_bm25), ("dense has more", more_dense),
+                        ("equal", ~more_bm25 & ~more_dense)):
+        print(f"  {label:<32} n={int(mask.sum()):>3}  mean alpha J3 {j3_alpha[mask].mean():.3f}  J1 {j1_alpha[mask].mean():.3f}  "
+              f"DAT {dat_alpha[mask].mean():.3f}  | nDCG@10 J3 {per['ndcg@10'][mask].mean():.4f}  J1 {per_j1['ndcg@10'][mask].mean():.4f}")
+    judge_disagreement("Jev J3", j3_alpha, per, "Jev J1", j1_alpha, per_j1)
+    write_rows([{"query_id": c["query_id"], "alpha_j3": float(a3), "alpha_j1": float(a1),
+                 **{f"{m}_{r}_level": int(level[m][i, r - 1]) for m in ("dense", "bm25") for r in (1, 2, 3)},
+                 **{f"{m}_{r}_grade": int(grade[m][i, r - 1]) for m in ("dense", "bm25") for r in (1, 2, 3)}}
+                for i, (c, a3, a1) in enumerate(zip(cands, j3_alpha, j1_alpha))], RESULTS / "jev_j3_alphas_test.csv")
+    examples(per, per_j1, j3_alpha, rows, "Jev J3", "Jev J1")
+    return j3_alpha, per
+
+
 def main():
     parser = argparse.ArgumentParser(description="NFCorpus analyses")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("retrieval", "baselines", "dat", "j1"):
+    for name in ("retrieval", "baselines", "dat", "j1", "j3"):
         sub.add_parser(name)
     args = parser.parse_args()
     if args.command == "retrieval":
@@ -465,6 +540,8 @@ def main():
         dat_analysis()
     elif args.command == "j1":
         j1_analysis()
+    elif args.command == "j3":
+        j3_analysis()
 
 
 if __name__ == "__main__":

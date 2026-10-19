@@ -74,8 +74,8 @@ paragraphs per retriever instead of top-1.
 | 4 | N5 | Judge pipeline for named datasets + SQuAD regression check | done: 10/10 SQuAD result files byte-identical | free |
 | 4 | N6 | DAT (GPT-4o-mini) on NFCorpus | done: **DAT below dev-tuned fixed alpha** (-1.32 nDCG) | $0.054 |
 | 4 | N7 | Jev J1 on NFCorpus | done: **J1 = DAT (+0.53 n.s.) at 2.6x lower cost; below fixed 0.8** | $0.021 |
-| 4 | N8 | Jev J3 on NFCorpus | **in progress** | ~$0.07 |
-| 4 | N9 | Full analysis | to do | free |
+| 4 | N8 | Jev J3 on NFCorpus | done: **J3 = J1 (-0.15 n.s.); SQuAD penalty gone, no gain** | $0.056 |
+| 4 | N9 | Full analysis | **in progress** | free |
 | 4 | N10 | Fair latency | to do | ~$0.05 |
 | 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
 
@@ -1791,3 +1791,124 @@ rubric alignment would help under a different alpha rule.
 the only-BM25-relevant group has 23.
 
 **Next:** N8, Jev J3 (top-3 per retriever, option C unchanged).
+
+**Git (N7):** commit `47e63ff` on `extension/nfcorpus` (not pushed).
+
+### N8 Jev J3 on NFCorpus (done)
+
+**Objective (RQ2 on a multi-relevance dataset):** on SQuAD, judging the
+top-3 documents per retriever (J3) was significantly worse than top-1
+because a correct retriever's #2 and #3 were wrong by construction. Does
+that change when many documents per query are relevant? Option C
+(rank-weighted mean of levels, weights 1, 1/2, 1/3, then DAT Eq. 6) was
+kept exactly as chosen on SQuAD's tune set.
+
+**Commands:**
+
+```
+python -m extension.nfcorpus_judges jev --k 3 --set nfcorpus-dev --limit 20   # pilot
+python -m extension.nfcorpus_judges jev --k 3 --set nfcorpus-test             # full test
+python -m extension.nfcorpus_analysis j3                                      # analysis
+```
+
+**Pilot (20 dev):** 20/20 valid, 6 judgments each, `jev-1.13.0`, mean
+3,978 input tokens (max 7,903), $0.000167 per query. **Full test:**
+323/323 valid, 0 errors, all on disk; 1,264,125 input tokens, 1.4 min.
+**Cost:** pilot $0.0033 + test $0.0531 = **$0.0564**. NFCorpus total
+$0.2921; **project total $1.6756 of $20**. Per-query levels, grades and
+alphas: `results/nfcorpus/jev_j3_alphas_test.csv`. Code added: `j3`
+analysis (multi-relevance inside the top-3, agreement with the
+better-ranking retriever, J3 vs J1 by number of relevant documents).
+
+**Results (test, 323 queries):**
+
+| Method | nDCG@10 | Recall@10 | MRR@10 | P@1 | Judge $ / query |
+|---|---:|---:|---:|---:|---:|
+| Fixed 0.8 (dev-tuned) | **0.4252** | 0.2110 | **0.6424** | **0.5604** | $0 |
+| Dense only | 0.4220 | 0.2108 | 0.6253 | 0.5418 | $0 |
+| Jev J1 | 0.4173 | 0.2069 | 0.6372 | 0.5542 | $0.000062 |
+| **Jev J3** | **0.4158** | 0.2073 | 0.6290 | 0.5449 | $0.000164 |
+| DAT (GPT-4o-mini) | 0.4120 | 0.2042 | 0.6308 | 0.5480 | $0.000158 |
+
+| Jev J3 minus | nDCG@10 [95% CI] | Recall@10 | MRR@10 | P@1 |
+|---|---|---|---|---|
+| **Jev J1** | **-0.0015 [-0.0082, +0.0050]** | +0.0004 [-0.0032, +0.0042] | -0.0082 [-0.0237, +0.0067] | -0.0093 [-0.0341, +0.0155] |
+| DAT | +0.0038 [-0.0046, +0.0127] | +0.0032 [-0.0013, +0.0078] | -0.0018 [-0.0157, +0.0114] | -0.0031 [-0.0279, +0.0186] |
+| Dense only | -0.0062 [-0.0172, +0.0048] | -0.0035 [-0.0094, +0.0023] | +0.0037 [-0.0196, +0.0269] | +0.0031 [-0.0310, +0.0372] |
+| **Fixed 0.8 (dev)** | **-0.0094 [-0.0170, -0.0020]** | -0.0037 [-0.0090, +0.0017] | -0.0134 [-0.0299, +0.0027] | -0.0155 [-0.0433, +0.0124] |
+| Fixed 0.6 (SQuAD) | +0.0123 [+0.0042, +0.0209] | +0.0034 [-0.0006, +0.0076] | +0.0094 [-0.0078, +0.0275] | +0.0124 [-0.0155, +0.0402] |
+| RRF | +0.0460 [+0.0302, +0.0620] | +0.0286 [+0.0182, +0.0404] | +0.0273 [-0.0002, +0.0556] | +0.0186 [-0.0217, +0.0588] |
+| BM25 only | +0.1092 [+0.0887, +0.1306] | +0.0551 [+0.0402, +0.0721] | +0.1193 [+0.0864, +0.1533] | +0.1176 [+0.0743, +0.1641] |
+
+**What happened.**
+1. **The SQuAD penalty disappears, but no gain appears.** J3 - J1 is -0.15
+   nDCG@10 points, not significant (CI [-0.82, +0.50]); on SQuAD it was
+   -1.90 P@1 points and significant. Per query: J3 better on 43, worse on
+   44, same on 236. J3 vs DAT: +0.38 (n.s.). Like the other judges, J3 is
+   significantly below the dev-tuned fixed alpha (-0.94).
+2. **Multiple relevance weakens the dilution, as hypothesised.** Inside
+   each retriever's top-3 (official labels):
+
+   | Retriever | Relevant at #1 / #2 / #3 | If #1 relevant: #2 / #3 relevant | Jev levels #1 / #2 / #3 (if #1 relevant) | (SQuAD, if #1 gold) |
+   |---|---|---|---|---|
+   | Dense | 54.2% / 42.7% / 35.0% | 60.0% / 49.1% | 4.43 / 3.31 / 2.99 | 4.94 / 2.21 / 1.64 |
+   | BM25 | 42.7% / 32.2% / 24.1% | 55.1% / 39.1% | 4.18 / 3.02 / 2.19 | 4.95 / 1.30 / 0.91 |
+
+   On SQuAD, a correct retriever's #2 and #3 could never be relevant; here
+   they are relevant 39-60% of the time and Jev scores them higher (about
+   3 instead of about 1-2), so averaging pulls the correct retriever down
+   much less. Some dilution remains: the levels still fall with rank.
+3. **J3 judges best but does not rank best.** Over all 1,938 judged
+   documents, J3's levels track the official grades best of the three
+   judges (Spearman **0.511**; mean level 2.14 / 3.88 / 4.39 for grades
+   0 / 1 / 2; J1 top-1 only: 0.473; DAT: 0.433). Measured against the
+   retriever that actually ranks better on its own (by its nDCG@10; 227
+   queries where they differ), J3 leans toward it most often and wrong
+   least:
+
+   | Judge | Toward the better retriever | Neutral (0.5) | Wrong way | When BM25 is better: toward BM25 |
+   |---|---:|---:|---:|---:|
+   | DAT | 50.7% | 30.8% | 18.5% | 26.7% |
+   | Jev J1 | 45.4% | 41.4% | 13.2% | 16.7% |
+   | **Jev J3** | **53.7%** | 33.5% | **12.8%** | 25.0% |
+
+   Yet these better decisions do not add up to a better nDCG@10: the
+   neutral share is still a third, and **when BM25 is the better
+   retriever (60 queries), all three judges lean toward it only 17-27% of
+   the time.**
+4. **By number of relevant documents:** with 31+ relevant (105 queries)
+   J3 is better than J1 on 28 and worse on 19 (means 0.5648 vs 0.5638);
+   with 6-30 relevant (132), better on 10 and worse on 21 (0.3269 vs
+   0.3307); with 1-5 (86), 5 vs 4 (0.3704 vs 0.3714). A weak hint that
+   top-3 helps only with very many relevant documents; not significant.
+5. **No systematic dense bias this time** (mean alpha J3 0.630, J1 0.651,
+   DAT 0.622; on SQuAD J3 was the most dense-leaning). J3 compresses
+   alpha toward the middle (0.6 for 12.4% of queries, 0.5 for 36.8%), and
+   it does not follow where the relevant documents are: when BM25 has more
+   relevant documents in its top-3 (34 queries), J3's mean alpha is still
+   0.541 (J1: 0.494).
+6. **Where J3 and J1 disagree** (45.8% of queries): when J3 leans more
+   toward dense (62), it wins 27 / loses 10; when it leans more toward
+   BM25 (86), it wins 16 / loses 34. As for J1 vs DAT, moving weight to
+   dense is what pays on NFCorpus.
+
+**Examples vs J1.** Gains: "growth promoters" and "Atkins diet" (J3 alpha
+1.0, 0.573 vs 0.290 and 0.696 vs 0.429). Losses: "factory farming
+practices" (0.389 vs 0.812) and "Diabetics Should Take Their Pulses"
+(dense's top-1 is grade 2, but J3 stays at 0.5: 0.283 vs 0.531).
+
+**What it means for RQ2:** the SQuAD result ("top-3 hurts") was largely a
+consequence of single-gold labels: with multiple relevant documents, J3
+is no longer worse than J1, and its judgments are the best aligned with
+the labels. But **top-3 judging still does not improve fusion**, and at
+2.7x J1's cost (similar to DAT's) it is **not justified** on NFCorpus.
+
+**Cannot conclude:** that J3 equals J1 (n.s. is not equivalence; CI
+-0.82 to +0.50 points) or that it would help with a different alpha rule
+or on datasets with even more relevant documents per query (hypotheses).
+
+**Problems:** none. **Tests:** 104 passed. **Limitations:** 323 queries;
+subgroup sizes (e.g. 34 BM25-more queries) are small.
+
+**Next:** N9, the full consolidated analysis recomputed from the saved
+outputs.
