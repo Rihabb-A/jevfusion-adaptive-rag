@@ -4,7 +4,11 @@ A detailed, cumulative record of everything done in this project: what we
 did, how, why, what it cost and what came out. Updated after every
 completed step until the project ends.
 
-**Last updated:** 19 October 2026, after Step 2.9 (RRF baseline).
+**Last updated:** 20 October 2026, after Step 2.10 (fair latency and final
+comparison table).
+
+**Every result table and analysis in one place:** [§11 Consolidated
+results](#11-consolidated-results-every-table-and-analysis).
 
 The formal deliverables are separate and are what graders read:
 `baseline/README.md` (DAT reproduction), `extension/README.md` (JevFusion,
@@ -56,11 +60,11 @@ paragraphs per retriever instead of top-1.
 | 2 | 2.7.2 | J3 (option C) on test set, compare with J1 and DAT | done: **J3 < J1 (significant), J3 ≈ DAT** | $0.353 |
 | 2 | 2.8 | Control: top-1 with J3's formula | done by construction (option C with k=1 is exactly J1) | free |
 | 2 | 2.9 | RRF baseline | done: **RRF weakest fusion; all judges beat it** | free |
-| 2 | 2.10 | Full comparison: quality, CIs, cost, fair latency | **next** | small |
-| 2 | 2.11 | `extension/README.md`, PR, close Issue 3 | to do | free |
+| 2 | 2.10 | Fair latency, final comparison table | done: **Jev J1 fastest, cheapest, best** | $0.056 |
+| 2 | 2.11 | `extension/README.md`, PR, close Issue 3 | **next** | free |
 | 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
 
-**Spend so far: $1.327 of $20** (see §8).
+**Spend so far: $1.383 of $20** (see §8).
 
 **Headline so far (test set, 2,996 questions):** Jev J1 P@1 **0.8899** vs
 DAT (GPT-4o-mini) 0.8735 vs fixed alpha 0.6 0.8571. Jev J1 beats DAT by
@@ -72,10 +76,17 @@ retriever (J3) is *worse* than top-1 (J1): P@1 0.8708 vs 0.8899, -1.90
 points (95% CI [-2.60, -1.23]), at 2.5x the cost. On single-gold SQuAD
 the extra paragraphs dilute the top-1 signal (§5, Steps 2.7.1-2.7.2).
 
-**RQ3 (quality part):** every judge beats both zero-call baselines. The
+**RQ3 answer:** every judge beats both zero-call baselines. The
 strongest zero-call baseline is fixed alpha 0.6 (P@1 0.8571); RRF is
-weaker (0.8104). Jev J1 beats fixed 0.6 by +3.27 points and RRF by +7.94.
-Latency, the remaining part of RQ3, is Step 2.10.
+weaker (0.8104). Jev J1 beats fixed 0.6 by +3.27 points and RRF by +7.94,
+for $0.047 per 1,000 questions and a median 2.4 s judge call.
+
+**RQ1 latency part:** measured fairly (same 100 questions, one request at
+a time), Jev J1's judge call is faster than DAT's on 81% of questions,
+by a median 527 ms (95% CI [413, 633] ms): p50 2.36 s vs 2.92 s.
+
+**Overall:** Jev J1 is the best method on every axis we measured: highest
+P@1 and MRR@20, 2.3x cheaper than DAT, and faster.
 
 ---
 
@@ -512,6 +523,68 @@ to check that our min-max score fusion is not an artifact.
   about $0.047 per 1,000 questions for about 33 more correct top-1 results
   per 1,000. Latency is measured next (Step 2.10).
 
+### 2.10 Fair latency and the final comparison table
+
+**Why a separate measurement:** the judge runs used 8 parallel requests
+under load, so their logged latencies say more about load than about the
+judges. Plan v3 (§5.2) asks for p50 / p95 judge latency.
+
+**Design** (`python -m extension.latency --n 100`):
+- the **same 100 random test questions** (seed 0) for all three judges;
+- **one request at a time**, never parallel;
+- per question the judges take turns in a **rotating order**, so each
+  judge goes first, second and third equally often and a slow network
+  patch hits them alike;
+- **2 warm-up calls per judge**, discarded (cold connections);
+- **fresh, uncached calls**, same request format, model and settings as the
+  real runs, timed end to end from the client (includes network);
+- each fresh reply is compared with the cached reply for the same request
+  (**repeatability**).
+
+**A bug, caught and fixed:** the first run's repeatability column showed
+0% for DAT, impossible at temperature 0. The fresh DAT scores were a
+Python tuple `(3, 4)` and the cached ones a JSON list `[3, 4]`, which
+never compare equal. Timings were unaffected, but the fresh replies had
+not been saved, so the comparison was fixed, fresh replies are now saved,
+and the **whole measurement was re-run** so every number comes from one
+consistent run. A unit test documents the issue.
+
+**Results** (second run; `results/latency_summary.csv`, per call in `results/latency_test.csv`):
+
+| Judge | Calls OK | p50 | p95 | Mean | Max | Same as cached |
+|---|---:|---:|---:|---:|---:|---:|
+| DAT (GPT-4o-mini) | 100/100 | 2,923 ms | 4,569 ms | 3,172 ms | 10,665 ms | 94% |
+| **Jev J1** | 100/100 | **2,355 ms** | **4,139 ms** | **2,576 ms** | 5,638 ms | 95% |
+| Jev J3 | 100/100 | 2,543 ms | 4,331 ms | 2,783 ms | 6,416 ms | 80% (all 6 levels) |
+
+Paired per question (same questions, 10,000 bootstrap resamples):
+
+| | Median difference vs DAT | 95% CI | Faster than DAT on |
+|---|---:|---|---:|
+| **Jev J1** | **-527 ms** | [-633, -413] ms | **81%** of questions |
+| Jev J3 | -346 ms | [-545, -158] ms | 70% of questions |
+
+- **Order effects:** none visible; each judge's median is similar whether
+  it went first, second or third (DAT 2.88-2.98 s, J1 2.28-2.42 s, J3
+  2.51-2.59 s).
+- **First run, for reference** (same design; only its repeatability
+  column was wrong): p50 DAT 2,572 ms, J1 2,135 ms, J3 2,220 ms. J1 was
+  again about 17-19% faster than DAT. That run had one extreme J3 call of
+  451 s (likely a stalled connection), which is why medians and p95 are
+  reported rather than means.
+- **What latency means here:** these are client-side times including the
+  network round trip, which is a large share of every call. Jev is faster
+  but not dramatically so in this setting (about 0.5 s per question).
+- **Repeatability:** DAT and Jev J1 repeat their own judgments on about
+  95% of questions. GPT-4o-mini is not fully deterministic even at
+  temperature 0 (one flip went from "0 0" to "5 5"; both still give
+  alpha 0.5). J3's 80% counts a question as repeated only if all 6 levels
+  match.
+- **Cost of this step:** $0.056 for two runs of 306 calls each.
+
+**Final comparison table** (`python -m extension.final_table`, recomputed
+from the caches; `results/final_comparison.csv`): see §11.1.
+
 ---
 
 ## 6. Decisions log
@@ -536,6 +609,9 @@ to check that our min-max score fusion is not an artifact.
 | 2.7.2 | Run J3 on test despite the negative tune result | Pre-registered evaluation; a test-set negative result is stronger evidence |
 | 2.8 | No separate control run | Option C with k=1 is exactly J1, so J1 already is the control |
 | 2.9 | RRF with the standard k = 60, not tuned | Standard published setting; a zero-judge baseline should not get extra tuning |
+| 2.10 | Latency: same 100 questions, sequential, rotating order, warm-up, fresh calls | Parallel-run timings measure load, not the judges |
+| 2.10 | Re-run the whole latency measurement after fixing the repeatability bug | All reported numbers from one consistent run |
+| 2.10 | Report p50 / p95, not means | One stalled call (451 s) in the first run shows means are fragile |
 
 ---
 
@@ -557,9 +633,11 @@ to check that our min-max score fusion is not an artifact.
 | `a83a773` | extension/jev | Step 2.7.2: J3 on test, group breakdown |
 | `1eaca5f` | extension/jev | This progress log (through 2.8) |
 | `0807900` | extension/jev | Step 2.9: RRF baseline + tests |
+| `66fe58d` | extension/jev | This progress log (through 2.9) |
+| `d8fa29f` | extension/jev | Step 2.10: latency, final table |
 
 `extension/jev` starts from `baseline/setup` (the baseline PR is not
-merged yet) and is not pushed yet. **69 unit tests** pass (`pytest`).
+merged yet) and is not pushed yet. **72 unit tests** pass (`pytest`).
 
 Local only (gitignored): `.env`, `.venv/`, `data/` (SQuAD, score matrices,
 embedding cache, judge caches). Not committed by choice: the paper PDF and
@@ -580,10 +658,11 @@ From `results/budget_ledger.csv` (every paid batch, billed cost):
 | Jev J1 test (incl. 6 re-judged) | 3,002 | $0.1410 |
 | Jev J3 tune (incl. 8 re-judged) | 2,873 | $0.3349 |
 | Jev J3 test | 2,996 | $0.3530 |
-| **Total** | | **$1.327 of $20** |
+| Latency measurement, 2 runs x 3 judges (incl. warm-up) | 612 | $0.0561 |
+| **Total** | | **$1.383 of $20** |
 
-Remaining planned spend: latency measurement (Step 2.10), small. Optional: GPT-4o-mini top-3 control (~$0.70), DAT with
-GPT-4o (~$5.30), DRCD (~$0.40).
+No further spend is planned for the core project. Optional extras: DAT
+with GPT-4o (~$5.30), GPT-4o-mini top-3 control (~$0.70), DRCD (~$0.40).
 
 ---
 
@@ -596,11 +675,213 @@ GPT-4o (~$5.30), DRCD (~$0.40).
 
 ## 10. Next step
 
-**Step 2.10 (fair latency and final comparison table):** the latencies
-logged so far came from runs with 8 parallel requests under load, so they
-are not comparable between judges. Measure each judge (GPT-4o-mini DAT,
-Jev J1, Jev J3) the same way: one request at a time, on the same random
-sample of test questions (e.g. 100), reporting p50 / p95 judge latency.
-Then assemble one final table (quality, CIs, cost per 1,000 questions,
-latency) for the report. Cost: a few cents (new calls, since cached
-replies cannot be timed).
+**Step 2.11 (free):** write `extension/README.md` (the graded extension
+write-up: what changed relative to DAT, the limitation it addresses, how
+it is evaluated, the result tables from §11, reproduce commands, costs,
+limitations), push `extension/jev`, and prepare the PR text for Issue 3.
+
+---
+
+## 11. Consolidated results: every table and analysis
+
+All numbers are on the SQuAD **test** set (2,996 questions) unless marked
+**tune**. Paired differences use the same questions for both methods,
+with 95% percentile bootstrap intervals from 10,000 resamples.
+
+### 11.1 Final comparison
+
+`results/final_comparison.csv` (`python -m extension.final_table`).
+
+| Method | P@1 | MRR@20 | Hybrid P@1 | P@1 vs DAT [95% CI] | P@1 vs fixed 0.6 [95% CI] | Judge $ / 1k questions | Judge p50 / p95 |
+|---|---:|---:|---:|---|---|---:|---|
+| BM25 only | 0.7610 | 0.8289 | 0.3494 | -0.1125 [-0.1248, -0.0998] | -0.0961 | $0 | none |
+| Dense only | 0.7730 | 0.8489 | 0.3835 | -0.1005 [-0.1132, -0.0878] | -0.0841 | $0 | none |
+| RRF (k=60) | 0.8104 | 0.8743 | 0.4896 | -0.0631 [-0.0744, -0.0517] | -0.0467 [-0.0564, -0.0370] | $0 | none |
+| Fixed alpha 0.6 | 0.8571 | 0.9087 | 0.6222 | -0.0164 [-0.0247, -0.0080] | reference | $0 | none |
+| DAT (GPT-4o-mini) | 0.8735 | 0.9167 | 0.6686 | reference | +0.0164 [+0.0080, +0.0247] | $0.110 | 2.92 s / 4.57 s |
+| **Jev J1** | **0.8899** | **0.9268** | **0.7150** | **+0.0164 [+0.0100, +0.0227]** | **+0.0327 [+0.0240, +0.0414]** | **$0.047** | **2.36 s / 4.14 s** |
+| Jev J3 | 0.8708 | 0.9198 | 0.6610 | -0.0027 [-0.0097, +0.0047] | +0.0137 [+0.0060, +0.0217] | $0.118 | 2.54 s / 4.33 s |
+
+(Fixed 0.6 differences for BM25 and dense are point values; every other
+cell comes from the paired bootstrap.)
+
+### 11.2 DAT reproduction vs the paper (SQuAD)
+
+| Method | P@1 paper | P@1 ours | MRR@20 paper | MRR@20 ours | Alpha acc. paper | Alpha acc. ours |
+|---|---:|---:|---:|---:|---:|---:|
+| BM25 only | 0.7594 | 0.7610 | 0.8223 | 0.8289 | 0.7981 | 0.7894 |
+| Dense only | 0.7396 | 0.7730 | 0.8119 | 0.8489 | 0.7789 | 0.8194 |
+| Fixed alpha 0.6 | 0.8461 | 0.8571 | 0.8997 | 0.9087 | 0.8975 | 0.8975 |
+| DAT (GPT-4o-mini) | 0.8676 | 0.8735 | 0.9093 | 0.9167 | 0.9194 | 0.9169 |
+
+Hybrid-sensitive subset (paper n = 1,111, ours 1,056):
+
+| Method | P@1 paper | P@1 ours | MRR@20 paper | MRR@20 ours | Alpha acc. paper | Alpha acc. ours |
+|---|---:|---:|---:|---:|---:|---:|
+| BM25 only | 0.3906 | 0.3494 | 0.5420 | 0.5288 | 0.4590 | 0.4025 |
+| Dense only | 0.3375 | 0.3835 | 0.5143 | 0.5855 | 0.4077 | 0.4877 |
+| Fixed alpha 0.6 | 0.6229 | 0.6222 | 0.7493 | 0.7554 | 0.7255 | 0.7093 |
+| DAT (GPT-4o-mini) | 0.6805 | 0.6686 | 0.7750 | 0.7779 | 0.7840 | 0.7642 |
+
+DAT's gain over fixed 0.6: paper +0.0215 P@1, ours +0.0164 [+0.0080,
++0.0247]; MRR@20 paper +0.0096, ours +0.0079 [+0.0029, +0.0130].
+
+### 11.3 All paired comparisons
+
+| Comparison | P@1 diff [95% CI] | MRR@20 diff [95% CI] | Rank 1 gained / lost | Reading |
+|---|---|---|---|---|
+| DAT - fixed 0.6 | +0.0164 [+0.0080, +0.0247] | +0.0079 [+0.0029, +0.0130] | 107 / 58 | DAT better (reproduces the paper's claim) |
+| **J1 - DAT** | **+0.0164 [+0.0100, +0.0227]** | +0.0101 [+0.0063, +0.0142] | 73 / 24 | **J1 better** (pre-agreed margin: 1 point) |
+| J1 - fixed 0.6 | +0.0327 [+0.0240, +0.0414] | +0.0181 [+0.0128, +0.0235] | 139 / 41 | J1 better |
+| J3 - J1 | -0.0190 [-0.0260, -0.0123] | -0.0070 [-0.0110, -0.0030] | 28 / 85 | J3 worse |
+| J3 - DAT | -0.0027 [-0.0097, +0.0047] | +0.0031 [-0.0012, +0.0076] | 58 / 66 | no significant difference |
+| J3 - fixed 0.6 | +0.0137 [+0.0060, +0.0217] | +0.0110 [+0.0064, +0.0157] | 91 / 50 | J3 better |
+| Fixed 0.6 - RRF | +0.0467 [+0.0370, +0.0564] | +0.0345 [+0.0287, +0.0403] | 184 / 44 | fixed better |
+| DAT - RRF | +0.0631 [+0.0517, +0.0744] | +0.0424 [+0.0353, +0.0495] | 252 / 63 | DAT better |
+| J1 - RRF | +0.0794 [+0.0681, +0.0908] | +0.0526 [+0.0452, +0.0601] | 284 / 46 | J1 better |
+| J3 - RRF | +0.0604 [+0.0487, +0.0718] | +0.0455 [+0.0383, +0.0527] | 252 / 71 | J3 better |
+
+### 11.4 P@1 by question group
+
+Groups are defined by the two retrievers' top-1 paragraphs.
+
+| Group | n | Fixed 0.6 | DAT | Jev J1 | Jev J3 |
+|---|---:|---:|---:|---:|---:|
+| Same paragraph from both | 2,001 | 0.9550 | 0.9550 | 0.9550 | 0.9550 |
+| Only dense right | 405 | 0.7284 | 0.8716 | **0.9531** | 0.8469 |
+| Only BM25 right | 369 | 0.8618 | 0.9106 | **0.9539** | 0.8862 |
+| Different paragraphs, both wrong | 221 | **0.1991** | 0.0769 | 0.0769 | 0.1267 |
+
+Jev J1 minus DAT, in rank-1 hits: +0, +33, +16, +0.
+
+### 11.5 Judge behavior on the 774 questions where exactly one retriever is right
+
+| Judge | Alpha leans the right way | Neutral (0.5) | Leans the wrong way | Mean alpha, only dense right | Mean alpha, only BM25 right |
+|---|---:|---:|---:|---:|---:|
+| DAT (GPT-4o-mini) | 88.2% | 3.4% | 8.4% | 0.835 | 0.210 |
+| **Jev J1** | **88.9%** | 9.8% | **1.3%** | **0.958** | **0.102** |
+| Jev J3 | 62.0% | 28.2% | 9.8% | 0.764 | 0.453 |
+
+Right direction for Jev J1 only: 44 questions; for DAT only: 39.
+
+### 11.6 Alpha distributions (share of 2,996 questions)
+
+All three judges' alphas lie on DAT's 0.1 grid (J3 option C also ends in
+DAT's rule, which rounds to one decimal).
+
+| Judge | 0.0 | 0.2 | 0.3 | 0.4 | 0.5 | 0.6 | 0.7 | 0.8 | 1.0 | Mean |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| DAT (GPT-4o-mini) | 6.3% | 3.1% | 2.3% | 1.6% | 67.9% | 2.0% | 2.5% | 5.0% | 9.2% | 0.521 |
+| Jev J1 | 10.5% | 0.1% | 0.0% | 0.6% | 70.9% | 0.5% | 0.0% | 1.1% | 16.3% | 0.532 |
+| Jev J3 | 1.8% | 1.0% | 0.7% | 5.4% | 50.8% | 22.8% | 2.8% | 4.4% | 10.1% | 0.574 |
+
+(0.1 and 0.9 never occur: DAT's formula cannot produce them; scores of 5
+trigger the 0.0 / 1.0 special cases instead.)
+
+| Pair of judges | Same alpha |
+|---|---:|
+| DAT vs Jev J1 | 80.8% |
+| DAT vs Jev J3 | 50.1% |
+| Jev J1 vs Jev J3 | 51.5% |
+
+Extreme alphas (exactly 0 or 1): DAT 463, Jev J1 802, Jev J3 358.
+
+Most common score pairs (dense, BM25): DAT 5/5 60.6%, 4/1 4.6%, 1/5
+2.9%, 1/4 2.9%, 5/1 2.6%; Jev J1 levels 5/5 1,983, 5/0 165, 4/5 126, 3/5
+122, 5/1 110.
+
+### 11.7 Cost, tokens, latency and repeatability
+
+| Judge | Calls per question | Mean input tokens | $ per question | $ per 1k questions | Full test run | Latency p50 / p95 (sequential) | Repeats own judgment |
+|---|---:|---:|---:|---:|---:|---|---:|
+| DAT (GPT-4o-mini) | 1 | ~724 | $0.000110 | $0.110 | $0.331 | 2.92 s / 4.57 s | 94% |
+| **Jev J1** | 1 | 1,118 | **$0.000047** | **$0.047** | $0.141 | **2.36 s / 4.14 s** | 95% |
+| Jev J3 | 1 | 2,805 | $0.000118 | $0.118 | $0.353 | 2.54 s / 4.33 s | 80% (6 of 6) |
+
+Jev uses more tokens per question than DAT, but each Jev input token costs
+$0.042 / 1M vs $0.15 / 1M (and Jev output is free). Paired latency vs DAT:
+J1 -527 ms [-633, -413], faster on 81% of questions; J3 -346 ms [-545,
+-158], faster on 70%.
+
+### 11.8 Tune-set tables (choices made before touching test)
+
+Alpha grid search for the fixed baseline (tune, 2,865 questions):
+
+| alpha | 0.0 | 0.1 | 0.2 | 0.3 | 0.4 | 0.5 | **0.6** | 0.7 | 0.8 | 0.9 | 1.0 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| P@1 | 0.6883 | 0.7065 | 0.7267 | 0.7511 | 0.7710 | 0.7878 | **0.7962** | 0.7955 | 0.7784 | 0.7382 | 0.6918 |
+| MRR@20 | 0.7594 | 0.7783 | 0.7983 | 0.8200 | 0.8376 | 0.8518 | **0.8611** | 0.8621 | 0.8512 | 0.8227 | 0.7843 |
+
+Jev J1 score mapping (Step 2.5):
+
+| Mapping | P@1 | MRR@20 | Alpha acc. | Hybrid P@1 |
+|---|---:|---:|---:|---:|
+| **top_level (chosen)** | **0.8363** | 0.8852 | 0.8991 | 0.6601 |
+| round | 0.8356 | 0.8852 | 0.8960 | 0.6586 |
+
+Jev J3 alpha option (Step 2.7.1):
+
+| Option | P@1 | MRR@20 | Alpha acc. | Hybrid P@1 |
+|---|---:|---:|---:|---:|
+| A mean -> DAT rule | 0.8098 | 0.8719 | 0.8691 | 0.6023 |
+| B smooth ratio | 0.8126 | 0.8733 | 0.8621 | 0.6084 |
+| **C rank-weighted -> DAT rule (chosen)** | **0.8147** | 0.8757 | 0.8789 | 0.6129 |
+| (reference: Jev J1) | 0.8363 | 0.8852 | 0.8991 | 0.6601 |
+
+J3 diagnosis (tune): Jev's mean level for each retriever's #1, #2 and #3
+paragraph, split by whether that retriever's #1 is the gold:
+
+| Retriever | #1 is gold: #1 / #2 / #3 | #1 is wrong: #1 / #2 / #3 |
+|---|---|---|
+| Dense | 4.94 / 2.21 / 1.64 | 3.25 / 3.45 / 2.62 |
+| BM25 | 4.95 / 1.30 / 0.91 | 1.79 / 2.17 / 1.50 |
+
+Where the gold paragraph sits in each retriever's top-3 (tune): dense
+#1 1,982, #2 326, #3 146, not in top-3 411; BM25 #1 1,972, #2 247, #3 97,
+not in top-3 549. Jev gives the same top-1 paragraph the same level in J1
+and inside J3 for 92% of questions.
+
+### 11.9 Key findings
+
+1. **The DAT reproduction holds:** every metric is within about 1 point of
+   the paper, and DAT's gain over fixed alpha is significant.
+2. **Jev is a better judge than GPT-4o-mini for DAT:** +1.64 points P@1
+   (significant), 2.3x cheaper, about 0.5 s faster per question.
+3. **Why:** Jev almost never pushes alpha toward the wrong retriever (1.3%
+   vs 8.4%). When unsure it stays neutral; when sure it commits fully
+   (alpha 0 or 1 for 802 questions vs 463).
+4. **Top-3 judging (J3) hurts on SQuAD:** -1.90 points vs J1. With one gold
+   paragraph per question, a correct retriever's #2 and #3 are wrong by
+   construction, so averaging dilutes its signal.
+5. **J3 is biased toward dense retrieval** (mean alpha 0.574; only 0.453
+   when BM25 alone is right). Dense's lower-ranked paragraphs are on-topic
+   near misses, which DAT's rubric rewards as "good wrong results" (levels
+   3-4); BM25's share keywords but drift off-topic (levels 1-2).
+6. **Both adaptive judges are weak when both retrievers are wrong:** fixed
+   0.6 gets 19.9% of those at rank 1, DAT and J1 only 7.7%. Committing to
+   one retriever removes the blend that sometimes surfaces the answer. J3
+   is in between (12.7%).
+7. **Score-based fusion beats rank-based fusion here:** RRF is the weakest
+   fusion method; score gaps carry information on SQuAD.
+
+### 11.10 Limitations
+
+- One dataset (SQuAD, English) with a single gold paragraph per question;
+  results, especially the J3 finding, may differ on multi-relevance
+  benchmarks (BEIR FiQA, NFCorpus) or on DRCD.
+- Our article sample differs from the authors' (no seed published), so
+  the reproduction is DAT-style, not an exact replication.
+- One judge prompt / rubric per judge, not optimized; Jev received DAT's
+  rubric as typed score levels, GPT-4o-mini as DAT's free-text prompt.
+- Latency is client-side from one location and includes network time; 100
+  questions per judge.
+- Jev 1.13 was pinned; results may change with later versions.
+- Retrieval quality, not final answer quality: no generator was evaluated.
+
+### 11.11 Possible future work
+
+- A hybrid of J1 and fixed alpha: use Jev's top-1 judgments, but fall back
+  toward a fixed blend when both top-1 paragraphs look weak (targets
+  finding 6).
+- J3 on benchmarks with several relevant documents per question.
+- DRCD and DAT with GPT-4o, to complete the paper's tables.
