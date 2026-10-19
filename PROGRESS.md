@@ -4,10 +4,12 @@ A detailed, cumulative record of everything done in this project: what we
 did, how, why, what it cost and what came out. Updated after every
 completed step until the project ends.
 
-**Last updated:** 20 October 2026, after the baseline PR (#1) was merged
-into `main` and `extension/jev` was pushed. **The SQuAD work (Phases 1
-and 2) is complete;** the extension PR is for the team to open. A BEIR NFCorpus phase is
-requested and will be planned after the team reviews the SQuAD work.
+**Last updated:** 20 October 2026, after Phase 4 Step N1 (NFCorpus
+downloaded and verified on branch `extension/nfcorpus`). Earlier the same
+day: the baseline PR (#1) was merged into `main` and `extension/jev` was
+pushed. **The SQuAD work (Phases 1 and 2) is complete;** the extension
+PR is for the team to open. **Phase 4 (BEIR NFCorpus) is in progress**,
+one approved step at a time (§12).
 
 **Every result table and analysis in one place:** [§11 Consolidated
 results](#11-consolidated-results-every-table-and-analysis).
@@ -64,7 +66,10 @@ paragraphs per retriever instead of top-1.
 | 2 | 2.9 | RRF baseline | done: **RRF weakest fusion; all judges beat it** | free |
 | 2 | 2.10 | Fair latency, final comparison table | done: **Jev J1 fastest, cheapest, best** | $0.056 |
 | 2 | 2.11 | `extension/README.md`, verification, PR and Issue 3 text | done; **pushed (approved 20 Oct); PR to open** | free |
-| 4 | NFCorpus | Second dataset (BEIR NFCorpus): plan, then small steps | **requested; plan after SQuAD review** | tbd |
+| 4 | N0 | NFCorpus plan (no downloads, code or API calls) | done; plan and 4 decisions approved (§12) | free |
+| 4 | N1 | Protect SQuAD data; download and verify NFCorpus | done: **verified, matches BEIR; SQuAD files unchanged** | free |
+| 4 | N2 | Graded-relevance metrics + tests | **next, awaiting approval** | free |
+| 4 | N3-N11 | NFCorpus retrieval, baselines, judges, analysis, docs | to do | ~$0.55 est. |
 | 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
 
 **Spend so far: $1.383 of $20** (see §8).
@@ -956,10 +961,154 @@ and inside J3 for 92% of questions.
 - Jev 1.13 was pinned; results may change with later versions.
 - Retrieval quality, not final answer quality: no generator was evaluated.
 
-### 11.11 Possible future work
+### 11.11 Possible future work (see also §12)
 
 - A hybrid of J1 and fixed alpha: use Jev's top-1 judgments, but fall back
   toward a fixed blend when both top-1 paragraphs look weak (targets
   finding 6).
 - J3 on benchmarks with several relevant documents per question.
 - DRCD and DAT with GPT-4o, to complete the paper's tables.
+
+---
+
+## 12. Phase 4 plan: BEIR NFCorpus (proposed 20 Oct 2026, awaiting approval)
+
+**Goal.** Test on a second dataset whether (1) Jev J1 generalizes beyond
+SQuAD, (2) J3 does better when several documents per query are relevant,
+(3) adaptive fusion stays competitive with fixed alpha and RRF. Report
+positive and negative findings alike; the completed SQuAD results stay
+untouched.
+
+**Step N0 (done): audit of SQuAD-only assumptions in our code.**
+
+| Assumption | Where | Why it breaks on NFCorpus | Plan |
+|---|---|---|---|
+| One `gold` paragraph per query | `prepare_squad.load_set`, `evaluate.gold_ranks` (P@1, MRR@20, hybrid subset, alpha accuracy), `dat_judge.dat_alphas` (top-1 "correct"), `jev_fusion` groups/agreement, `rrf`, `final_table` (51 references) | NFCorpus has many relevant documents per query with graded labels | New graded-relevance evaluation; SQuAD code left as is |
+| Set names `test` / `tune` only | CLI `choices`, `score_path`, judge cache paths, `latency.Judges("test")`, `final_table` | A run named `test` would **overwrite SQuAD caches** | All NFCorpus files under distinct names (`nfcorpus-dev`, `nfcorpus-test`) |
+| SQuAD folder layout | `prepare_squad` (`data/squad/...`) | BEIR format differs (corpus, queries, qrels per split) | New BEIR loader writing `data/nfcorpus/...` |
+| Paper reference numbers | `evaluate.PAPER_SQUAD` | No DAT paper numbers for NFCorpus | Reference: BEIR's published BM25 nDCG@10 as a sanity check |
+| One shared embedding cache file | `data/cache/embeddings_*.npz` (rewritten on save) | Rewriting it risks the SQuAD embeddings (OneDrive lost writes twice) | Back up `data/cache/` before any NFCorpus run |
+
+**Reused unchanged:** `retrieve.bm25_scores`, `dense_scores`,
+`EmbeddingCache`, `tokenize`; `dat_fusion.minmax`, `fuse`, `dat_alpha`;
+`evaluate.paired_bootstrap_ci`; `dat_judge` prompt, parser, settings,
+`call_judge`, `JudgeCache`, `request_key`; `jev_judge` request building,
+`call_jev`, `parse_jev`, validation; `jev_fusion.j1_alphas`,
+`multi_alphas`, `CHOSEN_MAPPING` (`top_level`), `CHOSEN_J3_OPTION` (C);
+`rrf.ranks_from_scores`, `rrf_scores`; `budget`.
+
+**New:** BEIR download/verification; graded metrics (nDCG@10 with linear
+gains as in BEIR/pytrec_eval, Recall@10, MRR@10, P@1 with "relevant" =
+grade >= 1); judge loops that accept a dataset's candidates (small,
+backward-compatible change with a regression check that SQuAD outputs are
+byte-identical); NFCorpus analysis (J3 vs J1 by number of relevant
+documents, relevance of #2/#3, judge behavior); tests.
+
+| Step | What | Cost | Time |
+|---|---|---|---|
+| N1 | Branch `extension/nfcorpus`; back up `data/cache`; download NFCorpus from the official BEIR source with checksum; verify corpus, queries, dev/test splits, qrels (relevant docs per query, grade distribution, lengths); manifest | free | ~15 min |
+| N2 | Graded metrics module + tests on hand-built examples | free | ~30 min |
+| N3 | BM25 (free), then dense embeddings of the corpus and dev/test queries; sanity check vs BEIR's published BM25 | ~$0.15-0.25 | ~20 min |
+| N4 | Zero-call baselines: BM25, dense, RRF, fixed alpha 0.6 (zero-shot from SQuAD); dev-tuned alpha reported separately | free | minutes |
+| N5 | Make the judge loops dataset-aware; regression check: SQuAD results reproduced exactly, no API calls | free | ~30 min |
+| N6 | DAT (GPT-4o-mini): 20-query pilot, then test (and dev) | ~$0.12 | ~10 min |
+| N7 | Jev J1: test (and dev) | ~$0.04 | ~10 min |
+| N8 | Jev J3: test (and dev) | ~$0.11 | ~10 min |
+| N9 | Analysis: full comparison, paired CIs, J3 vs J1 under multiple relevance, judge behavior, NFCorpus vs SQuAD | free | ~1 h |
+| N10 | Fair latency on 100 NFCorpus test queries (optional) | ~$0.04 | ~15 min |
+| N11 | `extension/README.md` NFCorpus section, PROGRESS, commit; push only after approval | free | ~1 h |
+
+**Estimated total:** about $0.55 (range $0.40-0.90); project total about
+$1.9-2.3 of $20. Roughly 1-2 working days.
+
+**Decisions to confirm before N1:** index `title + text` for both
+retrievers (BEIR convention); report on the test split, use dev only for
+tuned variants (reported separately); keep DAT's prompt and Jev's rubric
+unchanged for the zero-shot run although NFCorpus queries are short
+topics, not questions; primary metric nDCG@10. Caveat: about 323 test
+queries, about 9x fewer than SQuAD, so confidence intervals will be wider.
+
+**Approved 20 Oct 2026:** all four decisions as proposed (index title +
+text; dev for tuning, test for final results; DAT prompt, Jev rubric,
+`top_level` and option C unchanged for zero-shot; nDCG@10 primary, with
+Recall@10, MRR@10 and P@1 secondary).
+
+### N1 Protect SQuAD data; download and verify NFCorpus (free)
+
+**Branch:** `extension/nfcorpus`, created from `extension/jev` (the
+extension PR is not merged yet; `extension/jev` itself was not changed).
+
+**Protection, before anything else:**
+- Copied all 18 SQuAD data and cache files (`data/cache`, `data/squad`,
+  the SQuAD manifest; 172 MB) to
+  `C:\Users\RihabAtwi\jevfusion-backups\2026-10-20-before-nfcorpus\`,
+  outside OneDrive, with SHA-256 checksums of originals and copy
+  (identical) and the Git commit at backup time (`48179a5`).
+- After N1, the checksums were recomputed: **all 18 files byte-identical**.
+  No SQuAD code or result file changed (`git status`).
+- NFCorpus files live only under `data/nfcorpus/` (gitignored, 12 MB);
+  the committed record is `data/nfcorpus_manifest.json`.
+
+**Source:** the official BEIR link and MD5 from the BEIR README
+(`github.com/beir-cellar/beir`):
+`https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/nfcorpus.zip`,
+MD5 `a89dba18a62ef92f7d323ec890a0d38d` (**matched**), SHA-256
+`efe5be03...671b0b` (full value and per-file hashes in the manifest).
+Extraction refuses any archive entry that would land outside
+`data/nfcorpus/raw` (unit-tested).
+
+**Command:** `python -m extension.beir_data --dataset nfcorpus`
+(new `extension/beir_data.py`: download, MD5 check, safe extraction, BEIR
+loader, `doc_text` = title + text, verification, manifest; 5 new tests).
+
+**Verification** (no problems found: no duplicate ids, no empty
+documents, every judged query and document exists, no query shared
+between splits):
+
+| | BEIR README | Ours |
+|---|---:|---:|
+| Corpus documents | 3.6K | **3,633** (all with a title) |
+| Test queries | 323 | **323** |
+| Avg relevant docs per test query | 38.2 | **38.19** |
+
+| Split | Queries with labels | Judgments | Grade 1 | Grade 2 | Relevant per query: mean / median / max | Queries with a grade-2 doc |
+|---|---:|---:|---:|---:|---|---:|
+| train | 2,590 | 110,575 | 110,575 | 0 | 42.69 / 18 / 1,363 | 0 |
+| **dev** | **324** | 11,385 | 10,864 | 521 | 35.14 / 18.5 / 919 | (mean 1.61 per query) |
+| **test** | **323** | 12,334 | 11,758 | 576 | 38.19 / 16 / 475 | 119 |
+
+- 3,237 queries in total (2,590 + 324 + 323). Grades are only 1 and 2
+  (no 0 rows); train has grade 1 only and is not used.
+- Documents: mean 234 words / 1,591 characters (title + text), max
+  10,090 characters; **about 2.1x longer** than SQuAD test paragraphs (743
+  characters).
+- Queries: mean 3.3 words, **median 2** (e.g. "myelopathy", "betel nuts",
+  "Increasing Muscle Strength with Fenugreek").
+
+**How NFCorpus differs from SQuAD (consequences for the next steps):**
+1. **Many relevant documents per query** (median 16; 60% of test queries
+   have more than 10), so Recall@10 cannot reach 1 for most queries. Only
+   23 test queries are SQuAD-like with a single relevant document. This is
+   the setting where J3 might help.
+2. **Graded labels** (2 = highly, 1 = partially relevant; 95% are grade 1;
+   only 119 test queries have any grade-2 document), so nDCG@10 needs
+   graded gains.
+3. **Loose, indirect relevance:** labels come from citation links, e.g.
+   "Healthy Chocolate Milkshakes" counts a cherry-and-gout study as
+   relevant (grade 1). DAT's rubric ("directly answers the question") may
+   score such documents low even though the labels count them, a likely
+   source of judge-label disagreement to examine in N9.
+4. **Short topic queries, not questions:** the DAT prompt and Jev rubric
+   are kept unchanged for zero-shot (approved), but they assume a
+   question with an answer.
+5. **Bigger corpus (3,633 vs 621) and longer documents:** full-corpus
+   scoring is still cheap; judge requests will be roughly 2x longer.
+
+**Problems encountered:** none.
+
+**Cost:** $0. **Tests:** 77 passed (72 + 5 new).
+
+**Next:** Step N2 (free): graded-relevance metrics (nDCG@10 with linear
+gains as in BEIR / pytrec_eval, Recall@10, MRR@10, P@1 with relevant =
+grade >= 1) in a new module, tested on hand-built examples, without
+changing the SQuAD metric code.

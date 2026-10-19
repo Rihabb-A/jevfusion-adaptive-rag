@@ -16,6 +16,7 @@ venv/
 data/*
 !data/README.md
 !data/squad_sample_manifest.json
+!data/nfcorpus_manifest.json
 *.db
 *.sqlite3
 

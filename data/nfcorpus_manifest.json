@@ -1,0 +1,124 @@
+{
+  "dataset": "nfcorpus",
+  "source_url": "https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/nfcorpus.zip",
+  "md5": "a89dba18a62ef92f7d323ec890a0d38d",
+  "sha256": "efe5be03f8c5b86a5870102d0599d227c8c6e2484328e68c6522560385671b0b",
+  "beir_readme": {
+    "test_queries": 323,
+    "corpus": "3.6K",
+    "avg_relevant_per_query": 38.2
+  },
+  "indexed_text": "title + ' ' + text, for both BM25 and dense",
+  "files": {
+    "corpus.jsonl": "10cc83ef1826b1425e6a87090b5140b39b27755d5a27e48215a88611c899991f",
+    "qrels/dev.tsv": "b1d38b5e8f78c4a5820bce2b7ec2db54911d7690dc601e76811846b211180bd8",
+    "qrels/test.tsv": "f8fba6ef3d4dd9c3a242a8ba4ae38276fc3622fce7dcbae764766d564542fd2a",
+    "qrels/train.tsv": "6336b80f9bffc4f063f3aa450047ad35c0b7c534efe4a6ba35e16dbace047f6a",
+    "queries.jsonl": "d024e6621b84925d485ae473d316a0c3af31c62c8068a59fb29d22f7613aef2a"
+  },
+  "verification": {
+    "corpus_documents": 3633,
+    "documents_with_title": 3633,
+    "doc_words_title_plus_text": {
+      "mean": 233.77,
+      "median": 237,
+      "min": 17,
+      "max": 1481
+    },
+    "doc_chars_title_plus_text": {
+      "mean": 1590.78,
+      "median": 1615,
+      "min": 123,
+      "max": 10090
+    },
+    "queries_total": 3237,
+    "splits": {
+      "dev": {
+        "queries_with_judgments": 324,
+        "judgments": 11385,
+        "grade_counts": {
+          "1": 10864,
+          "2": 521
+        },
+        "relevant_per_query_grade_ge_1": {
+          "mean": 35.14,
+          "median": 18.5,
+          "min": 1,
+          "max": 919
+        },
+        "highly_relevant_per_query_grade_ge_2": {
+          "mean": 1.61,
+          "median": 0.0,
+          "min": 0,
+          "max": 22
+        },
+        "queries_without_any_relevant": 0,
+        "query_words": {
+          "mean": 3.39,
+          "median": 2.0,
+          "min": 1,
+          "max": 15
+        }
+      },
+      "test": {
+        "queries_with_judgments": 323,
+        "judgments": 12334,
+        "grade_counts": {
+          "1": 11758,
+          "2": 576
+        },
+        "relevant_per_query_grade_ge_1": {
+          "mean": 38.19,
+          "median": 16,
+          "min": 1,
+          "max": 475
+        },
+        "highly_relevant_per_query_grade_ge_2": {
+          "mean": 1.78,
+          "median": 0,
+          "min": 0,
+          "max": 21
+        },
+        "queries_without_any_relevant": 0,
+        "query_words": {
+          "mean": 3.29,
+          "median": 2,
+          "min": 1,
+          "max": 11
+        }
+      },
+      "train": {
+        "queries_with_judgments": 2590,
+        "judgments": 110575,
+        "grade_counts": {
+          "1": 110575
+        },
+        "relevant_per_query_grade_ge_1": {
+          "mean": 42.69,
+          "median": 18.0,
+          "min": 1,
+          "max": 1363
+        },
+        "highly_relevant_per_query_grade_ge_2": {
+          "mean": 0,
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "queries_without_any_relevant": 0,
+        "query_words": {
+          "mean": 3.31,
+          "median": 2.0,
+          "min": 1,
+          "max": 18
+        }
+      }
+    },
+    "query_overlap_between_splits": {
+      "dev&test": 0,
+      "dev&train": 0,
+      "test&train": 0
+    }
+  },
+  "problems": []
+}
