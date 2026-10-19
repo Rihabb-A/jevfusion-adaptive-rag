@@ -69,8 +69,14 @@ paragraphs per retriever instead of top-1.
 | 4 | N0 | NFCorpus plan (no downloads, code or API calls) | done; plan and 4 decisions approved (§12) | free |
 | 4 | N1 | Protect SQuAD data; download and verify NFCorpus | done: **verified, matches BEIR; SQuAD files unchanged** | free |
 | 4 | N2 | Graded-relevance metrics + tests | done: **matches pytrec_eval (BEIR's scorer) exactly** | free |
-| 4 | N3 | BM25 + dense retrieval on NFCorpus, sanity check vs BEIR | **next, awaiting approval** | ~$0.15-0.25 |
-| 4 | N4-N11 | Baselines, judges, analysis, docs | to do | ~$0.30 est. |
+| 4 | N3 | BM25 + dense retrieval on NFCorpus, sanity check vs BEIR | done: dense 0.4220 vs BM25 0.3067 nDCG@10; BM25 gap = stemming | $0.160 |
+| 4 | N4 | Zero-judge baselines (BM25, dense, RRF, fixed 0.6, dev-tuned alpha) | done: dev alpha 0.8 = dense; 0.6 hurts; RRF weakest | free |
+| 4 | N5 | Judge pipeline for named datasets + SQuAD regression check | **in progress** | free |
+| 4 | N6 | DAT (GPT-4o-mini) on NFCorpus | to do | ~$0.07 |
+| 4 | N7 | Jev J1 on NFCorpus | to do | ~$0.03 |
+| 4 | N8 | Jev J3 on NFCorpus | to do | ~$0.07 |
+| 4 | N9 | Full analysis | to do | free |
+| 4 | N10 | Fair latency | to do | ~$0.05 |
 | 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
 
 **Spend so far: $1.383 of $20** (see §8).
@@ -1336,3 +1342,106 @@ text-embedding-3-large NFCorpus number (none verified).
 
 **Next:** N4, the zero-judge baselines (BM25, dense, RRF, fixed alpha 0.6
 transferred from SQuAD, and an alpha tuned on dev only).
+
+**Git (N3):** commit `73d7808` on `extension/nfcorpus` (not pushed).
+
+### N4 Zero-judge baselines on NFCorpus (done, free)
+
+**Objective:** measure every method that needs no judge, so the judges in
+N6-N8 have strong, honest baselines: BM25, dense, RRF (k = 60), fixed
+alpha = 0.6 transferred unchanged from SQuAD, and a fixed alpha tuned on
+**dev only**.
+
+**Implemented:** `nfcorpus.method_scores` (reuses `dat_fusion.minmax` and
+`fuse` and `rrf.rrf_scores` unchanged), `nfcorpus.evaluate` (N2 metrics),
+`nfcorpus.choose_alpha` / `tune_alpha` (grid 0.0-1.0, step 0.1; rule fixed
+before running: highest **dev** nDCG@10, then dev Recall@10, then the
+alpha closest to 0.6; refuses any set other than `nfcorpus-dev`),
+`nfcorpus.baselines`, and `nfcorpus_analysis baselines` (paired tests,
+sensitivity, zero-match queries). Tests: 2 new (selection rule, dev-only
+guard). Files: `extension/nfcorpus.py`, `extension/nfcorpus_analysis.py`,
+`tests/test_nfcorpus.py`; results `results/nfcorpus/baselines.csv`,
+`dev_alpha_grid.csv`, `alpha_sensitivity.csv`.
+
+**Command:** `python -m extension.nfcorpus_analysis baselines`.
+**Splits:** dev for the alpha search; test for every reported number.
+
+**Dev alpha grid** (selection data):
+
+| alpha | 0.0 | 0.1 | 0.2 | 0.3 | 0.4 | 0.5 | 0.6 | 0.7 | **0.8** | 0.9 | 1.0 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| dev nDCG@10 | 0.2664 | 0.3192 | 0.3286 | 0.3410 | 0.3516 | 0.3611 | 0.3732 | 0.3843 | **0.3941** | 0.3940 | 0.3915 |
+| test nDCG@10 (descriptive only) | 0.3067 | 0.3478 | 0.3589 | 0.3679 | 0.3806 | 0.3922 | 0.4035 | 0.4139 | 0.4252 | 0.4296 | 0.4220 |
+
+**Dev-tuned alpha = 0.8** (0.9 is 0.0001 lower on dev). The test row was
+computed afterwards for sensitivity only; it peaks at 0.9 (0.4296), close
+to the dev choice, so the dev selection transfers reasonably.
+
+**Results:**
+
+| Method | dev nDCG@10 | test nDCG@10 | test Recall@10 | test MRR@10 | test P@1 |
+|---|---:|---:|---:|---:|---:|
+| BM25 only | 0.2664 | 0.3067 | 0.1522 | 0.5097 | 0.4272 |
+| **Dense only** | 0.3915 | **0.4220** | 0.2108 | 0.6253 | 0.5418 |
+| RRF (k=60) | 0.3230 | 0.3699 | 0.1787 | 0.6017 | 0.5263 |
+| Fixed alpha 0.6 (transferred from SQuAD) | 0.3732 | 0.4035 | 0.2039 | 0.6196 | 0.5325 |
+| **Fixed alpha 0.8 (dev-tuned)** | 0.3941 | **0.4252** | 0.2110 | 0.6424 | 0.5604 |
+
+**Paired differences on test** (95% CI, 10,000 resamples):
+
+| Comparison | nDCG@10 | Recall@10 | MRR@10 | P@1 |
+|---|---|---|---|---|
+| Fixed 0.6 - dense | **-0.0185 [-0.0317, -0.0054]** | -0.0069 [-0.0137, -0.0003] | -0.0057 [-0.0334, +0.0209] | -0.0093 [-0.0495, +0.0310] |
+| Fixed 0.8 (dev) - dense | +0.0032 [-0.0057, +0.0125] | +0.0002 [-0.0048, +0.0052] | +0.0171 [-0.0022, +0.0369] | +0.0186 [-0.0124, +0.0495] |
+| Fixed 0.6 - BM25 | +0.0968 [+0.0794, +0.1152] | +0.0517 [+0.0374, +0.0680] | +0.1099 [+0.0801, +0.1404] | +0.1053 [+0.0650, +0.1486] |
+| RRF - dense | **-0.0522 [-0.0708, -0.0343]** | -0.0321 [-0.0447, -0.0210] | -0.0235 [-0.0574, +0.0095] | -0.0155 [-0.0619, +0.0310] |
+| RRF - fixed 0.6 | -0.0336 [-0.0470, -0.0214] | -0.0252 [-0.0363, -0.0157] | -0.0179 [-0.0413, +0.0038] | -0.0062 [-0.0372, +0.0248] |
+| Fixed 0.8 (dev) - fixed 0.6 | **+0.0217 [+0.0138, +0.0301]** | +0.0071 [+0.0024, +0.0119] | +0.0228 [+0.0063, +0.0404] | +0.0279 [+0.0031, +0.0557] |
+| Fixed 0.8 (dev) - RRF | +0.0553 [+0.0408, +0.0708] | +0.0323 [+0.0217, +0.0444] | +0.0407 [+0.0145, +0.0678] | +0.0341 [-0.0031, +0.0743] |
+
+**What happened.**
+1. **Fusion barely helps on NFCorpus.** The best fusion (dev-tuned 0.8) is
+   only +0.32 nDCG points over dense alone, and that is not significant
+   (CI spans 0). On SQuAD, fusion with alpha 0.6 beat the best single
+   retriever by 8.4 points P@1.
+2. **The transferred SQuAD alpha (0.6) hurts:** it is significantly
+   *below* dense alone (-1.85 points). It gives BM25, which is 11.5 points
+   weaker here, too much weight.
+3. **Dev tuning works:** alpha 0.8 is significantly better than 0.6 (+2.17
+   points), and the dev and test grids agree on the shape (rising to a
+   flat peak at 0.8-0.9).
+4. **RRF is the weakest fusion method again**, 5.2 points below dense.
+   Part of this is specific to our full-corpus ranking: on the 25 test
+   queries where BM25 matches nothing, RRF still adds BM25's arbitrary
+   corpus-order "ranks" and falls to nDCG@10 0.0698, while score fusion
+   ignores the all-zero BM25 row (min-max gives zeros) and keeps dense's
+   0.2495. On the other 298 queries RRF is still below fixed 0.6 (0.3950
+   vs 0.4164), so the weakness is not only that artifact.
+
+**Why (plausible, supported by N3):** dense is much stronger than BM25 on
+NFCorpus's short topical queries and loose, citation-based relevance, so
+any weight on BM25 must be earned query by query. A fixed blend cannot do
+that; it either matches dense (alpha near 1) or dilutes it.
+
+**What it means for the research (RQ3).** On NFCorpus the bar for the
+judges is "dense alone / alpha 0.8" (about 0.42-0.43 nDCG@10), not the
+weak fixed 0.6. A judge earns its cost only if it moves weight toward BM25
+on exactly the queries where BM25 helps (like "Panama" in N3) and keeps it
+on dense elsewhere. Because DAT's rule returns alpha = 0.5 whenever both
+top-1 documents get equal scores, and 0.5 is worse than dense here, the
+judges start from a handicap on NFCorpus that they did not have on SQuAD
+(where the best fixed alpha was 0.6, close to 0.5).
+
+**How it compares with SQuAD:** SQuAD's tuned alpha (0.6) and NFCorpus's
+(0.8) differ, so a single fixed weight does not transfer across datasets,
+which is DAT's own motivation for per-query weights.
+
+**Cannot conclude:** that fusion never helps on NFCorpus (the CI for 0.8
+vs dense allows up to +1.25 points), or anything about the judges yet.
+
+**Problems:** none. **Tests:** 95 passed (93 + 2). **Cost:** $0.
+**Project total:** $1.5436 of $20 (NFCorpus $0.1602).
+
+**Next:** N5, adapting the DAT and Jev judge code to named datasets, with
+a proof that every SQuAD result is reproduced unchanged before any paid
+judge run.

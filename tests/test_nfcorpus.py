@@ -31,6 +31,19 @@ def test_unknown_set_is_rejected():
         nfcorpus.load_split("test")  # the SQuAD name must never resolve to NFCorpus
 
 
+def test_choose_alpha_rule():
+    grid = [(0.6, {"ndcg@10": 0.40, "recall@10": 0.20}), (0.8, {"ndcg@10": 0.42, "recall@10": 0.19}),
+            (0.9, {"ndcg@10": 0.42, "recall@10": 0.21})]
+    assert nfcorpus.choose_alpha(grid) == 0.9  # nDCG tie -> higher recall
+    grid[2][1]["recall@10"] = 0.19
+    assert nfcorpus.choose_alpha(grid) == 0.8  # full tie -> closest to 0.6
+
+
+def test_alpha_can_only_be_tuned_on_dev():
+    with pytest.raises(ValueError):
+        nfcorpus.tune_alpha("nfcorpus-test")
+
+
 def test_budget_guard_refuses_above_nfcorpus_cap(monkeypatch):
     monkeypatch.setattr(nfcorpus, "nfcorpus_spent", lambda: 1.9)
     with pytest.raises(SystemExit):

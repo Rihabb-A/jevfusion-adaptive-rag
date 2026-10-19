@@ -1,0 +1,11 @@
+set,method,n_queries,ndcg@10,recall@10,mrr@10,p@1
+nfcorpus-dev,BM25 only,324,0.2664,0.1099,0.4646,0.3889
+nfcorpus-dev,Dense only,324,0.3915,0.2031,0.5918,0.4969
+nfcorpus-dev,RRF (k=60),324,0.3230,0.1502,0.5234,0.4352
+nfcorpus-dev,Fixed alpha=0.6 (SQuAD),324,0.3732,0.1865,0.5736,0.4846
+nfcorpus-dev,Fixed alpha=0.8 (dev-tuned),324,0.3941,0.1964,0.5971,0.5031
+nfcorpus-test,BM25 only,323,0.3067,0.1522,0.5097,0.4272
+nfcorpus-test,Dense only,323,0.4220,0.2108,0.6253,0.5418
+nfcorpus-test,RRF (k=60),323,0.3699,0.1787,0.6017,0.5263
+nfcorpus-test,Fixed alpha=0.6 (SQuAD),323,0.4035,0.2039,0.6196,0.5325
+nfcorpus-test,Fixed alpha=0.8 (dev-tuned),323,0.4252,0.2110,0.6424,0.5604

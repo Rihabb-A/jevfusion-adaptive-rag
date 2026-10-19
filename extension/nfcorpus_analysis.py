@@ -182,13 +182,56 @@ def retrieval():
                 print(f"    {name:<5} grade {qrels[q].get(dids[j], 0)}  {title[dids[j]][:90]}")
 
 
+def print_paired(label, a, b, metrics=("ndcg@10", "recall@10", "mrr@10", "p@1")):
+    cells = []
+    for m in metrics:
+        mean, low, high = paired_bootstrap_ci(a[m], b[m])
+        cells.append(f"{m} {mean:+.4f} [{low:+.4f}, {high:+.4f}]")
+    print(f"  {label:<38} " + "  ".join(cells))
+
+
+def baseline_analysis():
+    """N4: zero-judge baselines; alpha tuned on dev only."""
+    from extension.nfcorpus import ALPHAS, FIXED_ALPHA, baselines, evaluate, method_scores
+    alpha_dev, rows = baselines()
+    tuned = f"Fixed alpha={alpha_dev:.1f} (dev-tuned)"
+    transferred = f"Fixed alpha={FIXED_ALPHA} (SQuAD)"
+    for set_name in SETS:
+        print(f"\n== {set_name} ==")
+        for r in (r for r in rows if r["set"] == set_name):
+            print(f"  {r['method']:<32} nDCG@10 {r['ndcg@10']:.4f}  R@10 {r['recall@10']:.4f}  "
+                  f"MRR@10 {r['mrr@10']:.4f}  P@1 {r['p@1']:.4f}")
+    per = evaluate("nfcorpus-test", method_scores("nfcorpus-test", {transferred: FIXED_ALPHA, tuned: alpha_dev}))
+    print("\n== Paired differences on test (95% CI, 10,000 resamples) ==")
+    for a, b in ((transferred, "Dense only"), (tuned, "Dense only"), (transferred, "BM25 only"),
+                 ("RRF (k=60)", "Dense only"), ("RRF (k=60)", transferred), (tuned, transferred), (tuned, "RRF (k=60)")):
+        print_paired(f"{a} - {b}", per[a], per[b])
+    grid_test = evaluate("nfcorpus-test", method_scores("nfcorpus-test", {f"{a:.1f}": a for a in ALPHAS}))
+    print("\n== Alpha sensitivity, nDCG@10 (test row descriptive only, never used for selection) ==")
+    dev_grid = evaluate("nfcorpus-dev", method_scores("nfcorpus-dev", {f"{a:.1f}": a for a in ALPHAS}))
+    print("  alpha " + " ".join(f"{a:>6.1f}" for a in ALPHAS))
+    for label, g in (("dev ", dev_grid), ("test", grid_test)):
+        print(f"  {label}  " + " ".join(f"{summarize(g[f'{a:.1f}'])['ndcg@10']:>6.4f}" for a in ALPHAS))
+    write_rows([{"alpha": float(a), "dev_ndcg@10": summarize(dev_grid[f"{a:.1f}"])["ndcg@10"],
+                 "test_ndcg@10_descriptive": summarize(grid_test[f"{a:.1f}"])["ndcg@10"]} for a in ALPHAS],
+               RESULTS / "alpha_sensitivity.csv")
+    bm25, _ = load_scores("nfcorpus-test")
+    zero = (bm25 > 0).sum(axis=1) == 0
+    print(f"\nTest queries where BM25 matches nothing (fusion = dense ranking): {zero.sum()}")
+    for name in (transferred, tuned, "RRF (k=60)", "Dense only"):
+        print(f"  {name:<32} nDCG@10 on those {per[name]['ndcg@10'][zero].mean():.4f}, on the rest {per[name]['ndcg@10'][~zero].mean():.4f}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="NFCorpus analyses")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("retrieval")
+    sub.add_parser("baselines")
     args = parser.parse_args()
     if args.command == "retrieval":
         retrieval()
+    elif args.command == "baselines":
+        baseline_analysis()
 
 
 if __name__ == "__main__":

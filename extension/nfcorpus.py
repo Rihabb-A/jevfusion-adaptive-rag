@@ -203,13 +203,20 @@ def evaluate(set_name, scores_by_method):
     return {name: per_query_metrics(s, query_ids, doc_ids, qrels) for name, s in scores_by_method.items()}
 
 
+def choose_alpha(grid):
+    """The rule fixed before running: highest nDCG@10, then Recall@10, then
+    the alpha closest to the transferred 0.6. `grid`: [(alpha, means)]."""
+    best = max(grid, key=lambda item: (item[1]["ndcg@10"], item[1]["recall@10"], -abs(item[0] - FIXED_ALPHA)))
+    return float(best[0])
+
+
 def tune_alpha(set_name="nfcorpus-dev"):
-    """Dev-only grid search: highest nDCG@10, then Recall@10, then the alpha
-    closest to the transferred 0.6 (rule fixed before running)."""
+    """Dev-only grid search over alpha 0.0-1.0 (step 0.1)."""
+    if set_name != "nfcorpus-dev":
+        raise ValueError("alpha may only be tuned on nfcorpus-dev")
     per = evaluate(set_name, method_scores(set_name, {f"alpha={a:.1f}": a for a in ALPHAS}))
     grid = [(a, summarize(per[f"alpha={a:.1f}"])) for a in ALPHAS]
-    best = max(grid, key=lambda item: (item[1]["ndcg@10"], item[1]["recall@10"], -abs(item[0] - FIXED_ALPHA)))
-    return float(best[0]), grid
+    return choose_alpha(grid), grid
 
 
 def write_rows(rows, path):
