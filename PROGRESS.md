@@ -4,7 +4,7 @@ A detailed, cumulative record of everything done in this project: what we
 did, how, why, what it cost and what came out. Updated after every
 completed step until the project ends.
 
-**Last updated:** 19 October 2026, after Step 2.7.2 (J3 on the test set).
+**Last updated:** 19 October 2026, after Step 2.9 (RRF baseline).
 
 The formal deliverables are separate and are what graders read:
 `baseline/README.md` (DAT reproduction), `extension/README.md` (JevFusion,
@@ -55,8 +55,8 @@ paragraphs per retriever instead of top-1.
 | 2 | 2.7.1 | J3 on tune set; choose alpha option | done: **C chosen; J3 below J1 on tune** | $0.335 |
 | 2 | 2.7.2 | J3 (option C) on test set, compare with J1 and DAT | done: **J3 < J1 (significant), J3 ≈ DAT** | $0.353 |
 | 2 | 2.8 | Control: top-1 with J3's formula | done by construction (option C with k=1 is exactly J1) | free |
-| 2 | 2.9 | RRF baseline | **next** | free |
-| 2 | 2.10 | Full comparison: quality, CIs, cost, fair latency | to do | small |
+| 2 | 2.9 | RRF baseline | done: **RRF weakest fusion; all judges beat it** | free |
+| 2 | 2.10 | Full comparison: quality, CIs, cost, fair latency | **next** | small |
 | 2 | 2.11 | `extension/README.md`, PR, close Issue 3 | to do | free |
 | 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
 
@@ -71,6 +71,11 @@ question.
 retriever (J3) is *worse* than top-1 (J1): P@1 0.8708 vs 0.8899, -1.90
 points (95% CI [-2.60, -1.23]), at 2.5x the cost. On single-gold SQuAD
 the extra paragraphs dilute the top-1 signal (§5, Steps 2.7.1-2.7.2).
+
+**RQ3 (quality part):** every judge beats both zero-call baselines. The
+strongest zero-call baseline is fixed alpha 0.6 (P@1 0.8571); RRF is
+weaker (0.8104). Jev J1 beats fixed 0.6 by +3.27 points and RRF by +7.94.
+Latency, the remaining part of RQ3, is Step 2.10.
 
 ---
 
@@ -466,6 +471,47 @@ time, 12.8 min, mean 2,805 input tokens, $0.353 ($0.000118 per question).
   paragraph is exactly J1 (unit-tested), so the whole J3-J1 gap is caused
   by adding paragraphs #2 and #3, not by the formula.
 
+### 2.9 RRF baseline (`python -m extension.rrf`, free)
+
+**What:** Reciprocal Rank Fusion (Cormack, Clarke & Buettcher, SIGIR
+2009): each paragraph scores `1/(60 + dense rank) + 1/(60 + BM25 rank)`.
+It uses rank positions only, so it needs no score normalization, no alpha
+and no judge. k = 60 is the standard value, not tuned. Plan v3 includes it
+to check that our min-max score fusion is not an artifact.
+
+**Results** (`results/rrf_test.csv`):
+
+| Method | Tune P@1 | Test P@1 | Test MRR@20 | Test hybrid P@1 |
+|---|---:|---:|---:|---:|
+| RRF (k=60) | 0.7414 | 0.8104 | 0.8743 | 0.4896 |
+| Fixed alpha 0.6 | 0.7962 | 0.8571 | 0.9087 | 0.6222 |
+| DAT (GPT-4o-mini) | - | 0.8735 | 0.9167 | 0.6686 |
+| **Jev J1** | 0.8363 | **0.8899** | **0.9268** | **0.7150** |
+| Jev J3 (option C) | 0.8147 | 0.8708 | 0.9198 | 0.6610 |
+
+| Method minus RRF (test, paired) | P@1, 95% CI | MRR@20, 95% CI | Rank 1 gained / lost |
+|---|---|---|---|
+| Fixed 0.6 | +0.0467 [+0.0370, +0.0564] | +0.0345 [+0.0287, +0.0403] | 184 / 44 |
+| DAT (GPT-4o-mini) | +0.0631 [+0.0517, +0.0744] | +0.0424 [+0.0353, +0.0495] | 252 / 63 |
+| **Jev J1** | **+0.0794 [+0.0681, +0.0908]** | +0.0526 [+0.0452, +0.0601] | 284 / 46 |
+| Jev J3 | +0.0604 [+0.0487, +0.0718] | +0.0455 [+0.0383, +0.0527] | 252 / 71 |
+
+**Conclusions:**
+- RRF is the **weakest fusion method**: better than either retriever alone
+  (BM25 0.7610, dense 0.7730) but 4.7 points below fixed 0.6, and every
+  alpha-based method beats it significantly.
+- **Why:** RRF throws away how *confident* each retriever is. When the two
+  disagree on #1, RRF just compares positions (1st vs 2nd...), while score
+  fusion also sees that, say, BM25's #1 is far ahead of its #2. On SQuAD
+  those score gaps carry real information.
+- So min-max score fusion is **not** an artifact hurting the baselines; it
+  is the stronger approach here, and fixed alpha 0.6 is the strongest
+  zero-call baseline to beat.
+- **RQ3 (quality):** all judges beat both zero-call baselines; Jev J1 by
+  the largest margin (+3.27 points over fixed 0.6). Cost: Jev J1 adds
+  about $0.047 per 1,000 questions for about 33 more correct top-1 results
+  per 1,000. Latency is measured next (Step 2.10).
+
 ---
 
 ## 6. Decisions log
@@ -489,6 +535,7 @@ time, 12.8 min, mean 2,805 input tokens, $0.353 ($0.000118 per question).
 | 2.7.1 | J3 option C chosen; no extra weightings tried afterwards | Pre-declared rule; post-hoc tuning would bias the result |
 | 2.7.2 | Run J3 on test despite the negative tune result | Pre-registered evaluation; a test-set negative result is stronger evidence |
 | 2.8 | No separate control run | Option C with k=1 is exactly J1, so J1 already is the control |
+| 2.9 | RRF with the standard k = 60, not tuned | Standard published setting; a zero-judge baseline should not get extra tuning |
 
 ---
 
@@ -508,9 +555,11 @@ time, 12.8 min, mean 2,805 input tokens, $0.353 ($0.000118 per question).
 | `13e2c25` | extension/jev | Step 2.7.1: J3 options, tune choice (C) |
 | `f5875de` | extension/jev | This progress log (through 2.7.1) |
 | `a83a773` | extension/jev | Step 2.7.2: J3 on test, group breakdown |
+| `1eaca5f` | extension/jev | This progress log (through 2.8) |
+| `0807900` | extension/jev | Step 2.9: RRF baseline + tests |
 
 `extension/jev` starts from `baseline/setup` (the baseline PR is not
-merged yet) and is not pushed yet. **66 unit tests** pass (`pytest`).
+merged yet) and is not pushed yet. **69 unit tests** pass (`pytest`).
 
 Local only (gitignored): `.env`, `.venv/`, `data/` (SQuAD, score matrices,
 embedding cache, judge caches). Not committed by choice: the paper PDF and
@@ -547,8 +596,11 @@ GPT-4o (~$5.30), DRCD (~$0.40).
 
 ## 10. Next step
 
-**Step 2.9 (RRF baseline, free):** add reciprocal rank fusion
-(`sum of 1 / (60 + rank)` over both retrievers), a strong zero-judge
-baseline that does not depend on score normalization, and compare it with
-fixed 0.6, DAT, J1 and J3 on the test set. Answers part of RQ3 (are the
-judges worth their cost against zero-call baselines?).
+**Step 2.10 (fair latency and final comparison table):** the latencies
+logged so far came from runs with 8 parallel requests under load, so they
+are not comparable between judges. Measure each judge (GPT-4o-mini DAT,
+Jev J1, Jev J3) the same way: one request at a time, on the same random
+sample of test questions (e.g. 100), reporting p50 / p95 judge latency.
+Then assemble one final table (quality, CIs, cost per 1,000 questions,
+latency) for the report. Cost: a few cents (new calls, since cached
+replies cannot be timed).
