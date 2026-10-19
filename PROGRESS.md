@@ -4,8 +4,10 @@ A detailed, cumulative record of everything done in this project: what we
 did, how, why, what it cost and what came out. Updated after every
 completed step until the project ends.
 
-**Last updated:** 20 October 2026, after Step 2.10 (fair latency and final
-comparison table).
+**Last updated:** 20 October 2026, after Step 2.11 (`extension/README.md`
+written and verified). **The SQuAD work (Phases 1 and 2) is complete;**
+pushing and the PRs await approval. A BEIR NFCorpus phase is requested
+and will be planned after the team reviews the SQuAD work.
 
 **Every result table and analysis in one place:** [§11 Consolidated
 results](#11-consolidated-results-every-table-and-analysis).
@@ -61,7 +63,8 @@ paragraphs per retriever instead of top-1.
 | 2 | 2.8 | Control: top-1 with J3's formula | done by construction (option C with k=1 is exactly J1) | free |
 | 2 | 2.9 | RRF baseline | done: **RRF weakest fusion; all judges beat it** | free |
 | 2 | 2.10 | Fair latency, final comparison table | done: **Jev J1 fastest, cheapest, best** | $0.056 |
-| 2 | 2.11 | `extension/README.md`, PR, close Issue 3 | **next** | free |
+| 2 | 2.11 | `extension/README.md`, verification, PR and Issue 3 text | done; **push and PR await approval** | free |
+| 4 | NFCorpus | Second dataset (BEIR NFCorpus): plan, then small steps | **requested; plan after SQuAD review** | tbd |
 | 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
 
 **Spend so far: $1.383 of $20** (see §8).
@@ -585,6 +588,58 @@ Paired per question (same questions, 10,000 bootstrap resamples):
 **Final comparison table** (`python -m extension.final_table`, recomputed
 from the caches; `results/final_comparison.csv`): see §11.1.
 
+### 2.11 `extension/README.md`, verification, PR and Issue 3 text
+
+**What:** replaced the template placeholder in `extension/README.md` with
+the graded write-up of the extension. **Why:** the course template
+requires `extension/README.md` to state what changed vs the baseline, the
+limitation addressed, a real comparison, and full-validation requirements.
+**Cost:** free (no API calls).
+
+**Contents of `extension/README.md`:** headline table; the DAT limitation
+addressed (paper Appendix B); RQ1-RQ3 with answers; a side-by-side of
+what changed vs DAT, stating plainly that J1 changes the model *and* the
+interface (typed score questions) *and* the integer mapping, so RQ1
+compares "DAT's judge" with "Jev with DAT's rubric"; setup and the
+pre-declared protocol; result tables (main, paired CIs, question groups,
+cost and latency, tune-set choices); why J1 beats DAT; why J3 is below J1;
+11 reproduce commands with time and cost; limitations and what full
+validation would require (other datasets, ~$1.30-1.70 each); cost
+breakdown (extension $1.018, project $1.383).
+
+**Verification** (a check script in the session scratchpad, not
+committed):
+1. Every number in the result CSVs (`final_comparison`, `jev_j1_test`,
+   `jev_j3_test`, `jev_j3_options_tune`, `rrf_test`, `latency_summary`,
+   ledger total), 76 values, was searched for in both documents.
+   `PROGRESS.md`: 76/76 after fixes. `extension/README.md`: 69/76; the 7
+   absent are baseline-vs-reference differences it deliberately omits or
+   shows in the reverse direction (DAT - fixed, fixed - RRF).
+2. Reverse check: every 4-decimal number in the README was looked up in
+   the result files and `baseline/README.md`. 36 were values only ever
+   printed (paired MRR CIs, question groups, tune `round` mapping); all 36
+   were **recomputed from the caches and matched exactly**.
+
+**Problems found and fixed:**
+- **Rounding error:** Jev J1's p50 latency is 2,354.9 ms = **2.35 s**, but
+  2.36 s had been written (rounding the already-rounded 2,355 ms) in
+  `PROGRESS.md` (3 places) and the README. Corrected everywhere.
+- **Incomplete table:** §11.1 listed the BM25 and dense differences vs
+  fixed 0.6 as point values although `final_comparison.csv` has their CIs;
+  CIs added, plus a hybrid MRR@20 column.
+- **Cost estimate:** a draft said "$0.80 per dataset" for full validation;
+  a new dataset needs embeddings, DAT, J1 and J3, about $1.30-1.70.
+  Corrected before committing.
+
+**Tests:** 72 passed. **Commit:** `981583d`.
+
+**Pull request plan (not pushed; awaiting approval).** `extension/jev`
+was branched from `baseline/setup`, whose PR is not merged yet. The clean
+order: (1) open and merge the baseline PR `baseline/setup -> main`; (2)
+push `extension/jev` and open `extension/jev -> main`, which then shows
+only the extension commits. PR and Issue 3 texts were drafted in the
+conversation for the team to post.
+
 ---
 
 ## 6. Decisions log
@@ -612,6 +667,9 @@ from the caches; `results/final_comparison.csv`): see §11.1.
 | 2.10 | Latency: same 100 questions, sequential, rotating order, warm-up, fresh calls | Parallel-run timings measure load, not the judges |
 | 2.10 | Re-run the whole latency measurement after fixing the repeatability bug | All reported numbers from one consistent run |
 | 2.10 | Report p50 / p95, not means | One stalled call (451 s) in the first run shows means are fragile |
+| 2.11 | State in the README that J1 changes model, interface and mapping together | Honest framing: RQ1 is "replace DAT's judge", not a pure model comparison |
+| 2.11 | Merge the baseline PR before opening the extension PR | `extension/jev` contains the baseline commits; this keeps the extension PR diff clean |
+| 2.11 | NFCorpus as a separate phase after the SQuAD review | Requested by the user; keeps the completed SQuAD results untouched |
 
 ---
 
@@ -635,6 +693,8 @@ from the caches; `results/final_comparison.csv`): see §11.1.
 | `0807900` | extension/jev | Step 2.9: RRF baseline + tests |
 | `66fe58d` | extension/jev | This progress log (through 2.9) |
 | `d8fa29f` | extension/jev | Step 2.10: latency, final table |
+| `d6595d9` | extension/jev | This progress log (through 2.10, §11 consolidated results) |
+| `981583d` | extension/jev | Step 2.11: `extension/README.md`; PROGRESS fixes |
 
 `extension/jev` starts from `baseline/setup` (the baseline PR is not
 merged yet) and is not pushed yet. **72 unit tests** pass (`pytest`).
@@ -668,17 +728,24 @@ with GPT-4o (~$5.30), GPT-4o-mini top-3 control (~$0.70), DRCD (~$0.40).
 
 ## 9. Open items for the team
 
+- Review the SQuAD work: `baseline/README.md`, `extension/README.md`, §11.
 - Open the PR `baseline/setup -> main`, get a teammate review, merge;
   close Issue 2 (all acceptance criteria met).
-- Open Issue 3 (Extension) with the drafted motivation text.
+- Approve pushing `extension/jev`; open Issue 3 and the extension PR with
+  the drafted texts; teammate review; merge; close Issue 3.
+- Phase 3: `report/REPORT.md`, slides (max 8), defense rehearsal.
 - Decide later: DRCD; the optional GPT-4o-mini top-3 control run.
 
 ## 10. Next step
 
-**Step 2.11 (free):** write `extension/README.md` (the graded extension
-write-up: what changed relative to DAT, the limitation it addresses, how
-it is evaluated, the result tables from §11, reproduce commands, costs,
-limitations), push `extension/jev`, and prepare the PR text for Issue 3.
+**Waiting for approval to push** `extension/jev` (after the baseline PR
+is merged, so the extension PR shows only extension work).
+
+**After the SQuAD review:** the BEIR NFCorpus phase starts with a plan
+only (no downloads, code or API calls): proposed small steps, what is
+reused, what is new (notably multi-document, graded relevance labels,
+which our SQuAD code assumes away: one `gold` paragraph per question),
+cost and time per step, and the recommended first step.
 
 ---
 
