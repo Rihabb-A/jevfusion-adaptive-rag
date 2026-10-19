@@ -5,8 +5,8 @@ did, how, why, what it cost and what came out. Updated after every
 completed step until the project ends.
 
 **Last updated:** 20 October 2026, after the baseline PR (#1) was merged
-into `main`. **The SQuAD work (Phases 1 and 2) is complete;** pushing
-`extension/jev` and its PR await approval. A BEIR NFCorpus phase is
+into `main` and `extension/jev` was pushed. **The SQuAD work (Phases 1
+and 2) is complete;** the extension PR is for the team to open. A BEIR NFCorpus phase is
 requested and will be planned after the team reviews the SQuAD work.
 
 **Every result table and analysis in one place:** [§11 Consolidated
@@ -63,7 +63,7 @@ paragraphs per retriever instead of top-1.
 | 2 | 2.8 | Control: top-1 with J3's formula | done by construction (option C with k=1 is exactly J1) | free |
 | 2 | 2.9 | RRF baseline | done: **RRF weakest fusion; all judges beat it** | free |
 | 2 | 2.10 | Fair latency, final comparison table | done: **Jev J1 fastest, cheapest, best** | $0.056 |
-| 2 | 2.11 | `extension/README.md`, verification, PR and Issue 3 text | done; **push and PR await approval** | free |
+| 2 | 2.11 | `extension/README.md`, verification, PR and Issue 3 text | done; **pushed (approved 20 Oct); PR to open** | free |
 | 4 | NFCorpus | Second dataset (BEIR NFCorpus): plan, then small steps | **requested; plan after SQuAD review** | tbd |
 | 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
 
@@ -701,7 +701,9 @@ conversation for the team to post.
 `extension/jev` starts from `baseline/setup`. Since PR #1 was merged with
 a merge commit, `origin/main...extension/jev` contains only the 16
 extension commits (23 files), so the extension PR needs no rebase.
-`extension/jev` is not pushed yet. **72 unit tests** pass (`pytest`).
+`extension/jev` was **pushed on 20 Oct 2026 after approval** (secret
+scan of all branch commits clean; no `.env` or cache files among the 23
+changed files). **72 unit tests** pass (`pytest`).
 
 Local only (gitignored): `.env`, `.venv/`, `data/` (SQuAD, score matrices,
 embedding cache, judge caches). Not committed by choice: the paper PDF and
@@ -737,16 +739,18 @@ with GPT-4o (~$5.30), GPT-4o-mini top-3 control (~$0.70), DRCD (~$0.40).
   20 Oct 2026). Make sure the baseline issue is closed with its
   acceptance criteria ticked (GitHub numbers issues and PRs together,
   so check the issue's real number before writing "Closes #N").
-- Approve pushing `extension/jev`; open Issue 3 and the extension PR with
-  the drafted texts; teammate review; merge; close Issue 3.
+- ~~Approve pushing `extension/jev`~~ done. Open Issue 3 and the extension
+  PR (`main...extension/jev`) with the drafted texts; teammate review;
+  merge with a merge commit; close Issue 3.
 - Phase 3: `report/REPORT.md`, slides (max 8), defense rehearsal.
 - Decide later: DRCD; the optional GPT-4o-mini top-3 control run.
 
 ## 10. Next step
 
-**Waiting for approval to push** `extension/jev`. The baseline PR is
-merged, so the extension PR (`extension/jev -> main`) will show only the
-16 extension commits.
+**For the team:** open Issue 3 and the PR
+`https://github.com/Rihabb-A/jevfusion-adaptive-rag/compare/main...extension/jev`
+(texts drafted in the conversation), review, merge. The PR shows only the
+extension commits.
 
 **After the SQuAD review:** the BEIR NFCorpus phase starts with a plan
 only (no downloads, code or API calls): proposed small steps, what is
