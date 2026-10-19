@@ -192,15 +192,20 @@ def jev_config():
     return api_key, base_url, model
 
 
-def judge_set(set_name, k=1, limit=None, sample_seed=0, workers=8):
+def judge_set(set_name, k=1, limit=None, sample_seed=0, workers=8, candidates=None):
     """Judge the selected questions with Jev, skipping cached ones. Valid and
     invalid 200 replies are cached (invalid ones carry `error`); HTTP errors
     are not, so a re-run retries them. Stops early if spend would pass the
-    budget left under BUDGET_CAP_USD."""
+    budget left under BUDGET_CAP_USD.
+
+    `candidates` (optional): rows with query_id, question and passages for
+    another dataset (e.g. NFCorpus); by default the SQuAD top-k candidates
+    of `set_name`, exactly as before. `set_name` names the cache."""
     api_key, base_url, model = jev_config()
     expected_model = model if VERSIONED_MODEL.fullmatch(model) else None
     cache = JudgeCache(cache_path(model, set_name, k))
-    selected = select_questions(topk_candidates(set_name, k), limit, sample_seed)
+    selected = select_questions(candidates if candidates is not None else topk_candidates(set_name, k),
+                                limit, sample_seed)
     jobs = []
     for row in selected:
         body = build_request(model, row["question"], row["passages"])

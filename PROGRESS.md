@@ -71,8 +71,8 @@ paragraphs per retriever instead of top-1.
 | 4 | N2 | Graded-relevance metrics + tests | done: **matches pytrec_eval (BEIR's scorer) exactly** | free |
 | 4 | N3 | BM25 + dense retrieval on NFCorpus, sanity check vs BEIR | done: dense 0.4220 vs BM25 0.3067 nDCG@10; BM25 gap = stemming | $0.160 |
 | 4 | N4 | Zero-judge baselines (BM25, dense, RRF, fixed 0.6, dev-tuned alpha) | done: dev alpha 0.8 = dense; 0.6 hurts; RRF weakest | free |
-| 4 | N5 | Judge pipeline for named datasets + SQuAD regression check | **in progress** | free |
-| 4 | N6 | DAT (GPT-4o-mini) on NFCorpus | to do | ~$0.07 |
+| 4 | N5 | Judge pipeline for named datasets + SQuAD regression check | done: 10/10 SQuAD result files byte-identical | free |
+| 4 | N6 | DAT (GPT-4o-mini) on NFCorpus | **in progress** | ~$0.07 |
 | 4 | N7 | Jev J1 on NFCorpus | to do | ~$0.03 |
 | 4 | N8 | Jev J3 on NFCorpus | to do | ~$0.07 |
 | 4 | N9 | Full analysis | to do | free |
@@ -1445,3 +1445,85 @@ vs dense allows up to +1.25 points), or anything about the judges yet.
 **Next:** N5, adapting the DAT and Jev judge code to named datasets, with
 a proof that every SQuAD result is reproduced unchanged before any paid
 judge run.
+
+**Git (N4):** commit `5ba13c4` on `extension/nfcorpus` (not pushed).
+
+### N5 Judge pipeline for named datasets + SQuAD regression check (done, free)
+
+**Objective:** run the exact SQuAD judges (DAT prompt and settings, Jev
+request format and validation, alpha rules) on NFCorpus candidates,
+without any risk to the SQuAD results.
+
+**Shared code changed (backward compatible, default behaviour unchanged):**
+- `baseline/dat_judge.judge_set(..., candidates=None)`: optional rows for
+  another dataset; without it, SQuAD candidates are built exactly as
+  before. The cache file is still named by `set_name`.
+- `extension/jev_judge.judge_set(..., candidates=None)`: same.
+- `extension/jev_fusion.load_judgments(set_name, k, candidates=None)`: same.
+
+**New:** `extension/nfcorpus_judges.py`: `build_dat_candidates` /
+`build_jev_candidates` (top-k per retriever from the N3 score matrices,
+document text = title + text, stable tie-breaking; a document in both
+lists stays under both labels, as on SQuAD); `check-sizes` (context-limit
+check); `run_dat` / `run_jev` (pre-run cost estimate against the $2
+NFCorpus cap, then the unchanged judge, then a check that every reply is
+in the cache **file**); `dat_alphas_nf` (DAT Eq. 6) and `jev_alphas_nf`
+(`top_level` + Eq. 6 for J1, option C for J3, both fixed on SQuAD's tune
+set). Tests: `tests/test_nfcorpus_judges.py` (7).
+
+**Tests added** (all network calls faked; ledger and caches redirected to a
+temporary folder): candidate inputs and rank positions, including a tie
+and an all-zero BM25 row; J3 slot order and duplicate documents; DAT and
+Jev top-1 agree on 20 random matrices; cache files separated by dataset
+(`nfcorpus-test.jsonl` vs `test.jsonl`); `judge_set` uses the given
+candidates and never builds SQuAD ones; without candidates it still builds
+SQuAD's; a Jev round trip through `judge_set` and `load_judgments`.
+
+**SQuAD regression check (before any paid NFCorpus judge run):** all ten
+SQuAD result-producing commands were re-run from their caches:
+
+```
+python -m baseline.evaluate --tune-alpha
+python -m baseline.dat_judge --set test --alphas
+python -m baseline.evaluate --dat
+python -m extension.jev_fusion --set tune --compare-mappings
+python -m extension.jev_fusion --set test
+python -m extension.jev_fusion --set tune --compare-j3
+python -m extension.jev_fusion --set test --j3
+python -m extension.jev_fusion --set tune --j3
+python -m extension.rrf
+python -m extension.final_table
+```
+
+Result: **all 10 SQuAD result files byte-identical** to their committed
+versions (`baseline_checkpoint`, `dat_alphas_test`, `dat_reproduction`,
+`jev_j1_test`, `jev_j1_alphas_test`, `jev_j3_options_tune`,
+`jev_j3_test`, `jev_j3_tune`, `rrf_test`, `final_comparison`), the
+pre-declared choices recomputed unchanged (`top_level`, option C), the
+budget ledger unchanged (no API calls), and the 18 SQuAD data/cache files
+byte-identical to the backup.
+
+**Request sizes** (`python -m extension.nfcorpus_judges check-sizes`,
+about 4 characters per token):
+
+| Set | DAT prompt mean / max | Jev J1 request mean / max | Jev J3 request mean / max | J3 state + longest question, max |
+|---|---|---|---|---|
+| dev | 1,169 / 2,413 | 1,303 / 2,581 | 3,914 / 8,264 | 6,968 |
+| test | 1,177 / 2,012 | 1,310 / 2,148 | 3,941 / 6,990 | 5,694 |
+| limit | 128,000 | 64,000 | 64,000 | 32,000 |
+
+Everything fits with a wide margin, so documents are sent whole, as on
+SQuAD (no truncation, no methodology change). NFCorpus requests are about
+1.6x (DAT) to 1.4x (J3) the size of SQuAD's.
+
+**One methodological note (no change made):** for the 25 test queries
+where BM25 matches nothing, BM25's "top-1" is simply the first document
+of the corpus. The judges see it as BM25's best result, exactly as the
+method defines it; a good judge should score it low and move alpha to
+dense.
+
+**Problems:** none. **Tests:** 102 passed (95 + 7). **Cost:** $0.
+**Project total:** $1.5436 of $20 (NFCorpus $0.1602).
+
+**Next:** N6, DAT with GPT-4o-mini: a 20-query dev pilot, then the full
+test set (323 queries).

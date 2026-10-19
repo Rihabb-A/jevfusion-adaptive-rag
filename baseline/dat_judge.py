@@ -233,14 +233,18 @@ def select_questions(candidates, limit=None, sample_seed=0):
     return random.Random(sample_seed).sample(candidates, limit)
 
 
-def judge_set(set_name, limit=None, sample_seed=0, workers=8):
+def judge_set(set_name, limit=None, sample_seed=0, workers=8, candidates=None):
     """Judge the selected questions, skipping any already in the cache.
     Successful HTTP replies are cached (even unparseable ones, for 1.4.6);
     HTTP errors are not, so a re-run retries them.
 
     `workers` requests run in parallel; only this thread writes the cache
     and tallies cost, and the run stops early if billed spend would pass
-    the budget left under BUDGET_CAP_USD."""
+    the budget left under BUDGET_CAP_USD.
+
+    `candidates` (optional): rows with query_id, question, dense_text and
+    bm25_text for another dataset (e.g. NFCorpus); by default the SQuAD
+    candidates of `set_name`, exactly as before. `set_name` names the cache."""
     load_dotenv(ROOT / ".env")
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
@@ -249,7 +253,8 @@ def judge_set(set_name, limit=None, sample_seed=0, workers=8):
     model = os.getenv("DAT_JUDGE_MODEL", "openai/gpt-4o-mini")
 
     cache = JudgeCache(cache_path(model, set_name))
-    selected = select_questions(top1_candidates(set_name), limit, sample_seed)
+    selected = select_questions(candidates if candidates is not None else top1_candidates(set_name),
+                                limit, sample_seed)
     jobs = []
     for row in selected:
         prompt = build_prompt(row["question"], row["dense_text"], row["bm25_text"])
