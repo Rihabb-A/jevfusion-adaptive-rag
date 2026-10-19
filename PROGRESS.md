@@ -83,7 +83,7 @@ for $0.047 per 1,000 questions and a median 2.4 s judge call.
 
 **RQ1 latency part:** measured fairly (same 100 questions, one request at
 a time), Jev J1's judge call is faster than DAT's on 81% of questions,
-by a median 527 ms (95% CI [413, 633] ms): p50 2.36 s vs 2.92 s.
+by a median 527 ms (95% CI [413, 633] ms): p50 2.35 s vs 2.92 s.
 
 **Overall:** Jev J1 is the best method on every axis we measured: highest
 P@1 and MRR@20, 2.3x cheaper than DAT, and faster.
@@ -692,18 +692,18 @@ with 95% percentile bootstrap intervals from 10,000 resamples.
 
 `results/final_comparison.csv` (`python -m extension.final_table`).
 
-| Method | P@1 | MRR@20 | Hybrid P@1 | P@1 vs DAT [95% CI] | P@1 vs fixed 0.6 [95% CI] | Judge $ / 1k questions | Judge p50 / p95 |
-|---|---:|---:|---:|---|---|---:|---|
-| BM25 only | 0.7610 | 0.8289 | 0.3494 | -0.1125 [-0.1248, -0.0998] | -0.0961 | $0 | none |
-| Dense only | 0.7730 | 0.8489 | 0.3835 | -0.1005 [-0.1132, -0.0878] | -0.0841 | $0 | none |
-| RRF (k=60) | 0.8104 | 0.8743 | 0.4896 | -0.0631 [-0.0744, -0.0517] | -0.0467 [-0.0564, -0.0370] | $0 | none |
-| Fixed alpha 0.6 | 0.8571 | 0.9087 | 0.6222 | -0.0164 [-0.0247, -0.0080] | reference | $0 | none |
-| DAT (GPT-4o-mini) | 0.8735 | 0.9167 | 0.6686 | reference | +0.0164 [+0.0080, +0.0247] | $0.110 | 2.92 s / 4.57 s |
-| **Jev J1** | **0.8899** | **0.9268** | **0.7150** | **+0.0164 [+0.0100, +0.0227]** | **+0.0327 [+0.0240, +0.0414]** | **$0.047** | **2.36 s / 4.14 s** |
-| Jev J3 | 0.8708 | 0.9198 | 0.6610 | -0.0027 [-0.0097, +0.0047] | +0.0137 [+0.0060, +0.0217] | $0.118 | 2.54 s / 4.33 s |
+| Method | P@1 | MRR@20 | Hybrid P@1 | Hybrid MRR@20 | P@1 vs DAT [95% CI] | P@1 vs fixed 0.6 [95% CI] | Judge $ / 1k questions | Judge p50 / p95 |
+|---|---:|---:|---:|---:|---|---|---:|---|
+| BM25 only | 0.7610 | 0.8289 | 0.3494 | 0.5288 | -0.1125 [-0.1248, -0.0998] | -0.0961 [-0.1085, -0.0841] | $0 | none |
+| Dense only | 0.7730 | 0.8489 | 0.3835 | 0.5855 | -0.1005 [-0.1132, -0.0878] | -0.0841 [-0.0981, -0.0704] | $0 | none |
+| RRF (k=60) | 0.8104 | 0.8743 | 0.4896 | 0.6576 | -0.0631 [-0.0744, -0.0517] | -0.0467 [-0.0564, -0.0370] | $0 | none |
+| Fixed alpha 0.6 | 0.8571 | 0.9087 | 0.6222 | 0.7554 | -0.0164 [-0.0247, -0.0080] | reference | $0 | none |
+| DAT (GPT-4o-mini) | 0.8735 | 0.9167 | 0.6686 | 0.7779 | reference | +0.0164 [+0.0080, +0.0247] | $0.110 | 2.92 s / 4.57 s |
+| **Jev J1** | **0.8899** | **0.9268** | **0.7150** | **0.8067** | **+0.0164 [+0.0100, +0.0227]** | **+0.0327 [+0.0240, +0.0414]** | **$0.047** | **2.35 s / 4.14 s** |
+| Jev J3 | 0.8708 | 0.9198 | 0.6610 | 0.7867 | -0.0027 [-0.0097, +0.0047] | +0.0137 [+0.0060, +0.0217] | $0.118 | 2.54 s / 4.33 s |
 
-(Fixed 0.6 differences for BM25 and dense are point values; every other
-cell comes from the paired bootstrap.)
+Every difference cell comes from the paired bootstrap (same questions,
+10,000 resamples).
 
 ### 11.2 DAT reproduction vs the paper (SQuAD)
 
@@ -795,7 +795,7 @@ Most common score pairs (dense, BM25): DAT 5/5 60.6%, 4/1 4.6%, 1/5
 | Judge | Calls per question | Mean input tokens | $ per question | $ per 1k questions | Full test run | Latency p50 / p95 (sequential) | Repeats own judgment |
 |---|---:|---:|---:|---:|---:|---|---:|
 | DAT (GPT-4o-mini) | 1 | ~724 | $0.000110 | $0.110 | $0.331 | 2.92 s / 4.57 s | 94% |
-| **Jev J1** | 1 | 1,118 | **$0.000047** | **$0.047** | $0.141 | **2.36 s / 4.14 s** | 95% |
+| **Jev J1** | 1 | 1,118 | **$0.000047** | **$0.047** | $0.141 | **2.35 s / 4.14 s** | 95% |
 | Jev J3 | 1 | 2,805 | $0.000118 | $0.118 | $0.353 | 2.54 s / 4.33 s | 80% (6 of 6) |
 
 Jev uses more tokens per question than DAT, but each Jev input token costs
