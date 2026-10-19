@@ -1,0 +1,83 @@
+{
+  "seed": 42,
+  "max_questions": 3000,
+  "squad_version": "1.1",
+  "sets": {
+    "test": {
+      "source_split": "dev",
+      "source_url": "https://rajpurkar.github.io/SQuAD-explorer/dataset/dev-v1.1.json",
+      "source_sha256": "95aa6a52d5d6a735563366753ca50492a658031da74f301ac5238b03966972c9",
+      "articles": 13,
+      "paragraphs": 621,
+      "questions": 2996,
+      "article_indices": [
+        29,
+        23,
+        24,
+        10,
+        21,
+        9,
+        30,
+        39,
+        12,
+        3,
+        35,
+        4,
+        43
+      ],
+      "article_titles": [
+        "Construction",
+        "Victoria_and_Albert_Museum",
+        "American_Broadcasting_Company",
+        "Huguenot",
+        "Geology",
+        "Victoria_(Australia)",
+        "Private_school",
+        "Chloroplast",
+        "Oxygen",
+        "Nikola_Tesla",
+        "University_of_Chicago",
+        "Computational_complexity_theory",
+        "Islamism"
+      ]
+    },
+    "tune": {
+      "source_split": "train",
+      "source_url": "https://rajpurkar.github.io/SQuAD-explorer/dataset/train-v1.1.json",
+      "source_sha256": "3527663986b8295af4f7fcdff1ba1ff3f72d07d61a20f487cb238a6ef92fd955",
+      "articles": 13,
+      "paragraphs": 623,
+      "questions": 2865,
+      "article_indices": [
+        170,
+        226,
+        231,
+        345,
+        337,
+        106,
+        199,
+        300,
+        374,
+        163,
+        162,
+        94,
+        41
+      ],
+      "article_titles": [
+        "Sexual_orientation",
+        "Myanmar",
+        "Carnival",
+        "Neolithic",
+        "Zinc",
+        "The_Times",
+        "Korean_War",
+        "Tibet",
+        "Greeks",
+        "Franco-Prussian_War",
+        "United_States_Army",
+        "List_of_numbered_streets_in_Manhattan",
+        "BBC_Television"
+      ]
+    }
+  }
+}

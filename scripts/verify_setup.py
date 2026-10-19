@@ -22,7 +22,13 @@ results = []
 
 # Common LLM provider key names. Add your baseline's own key name here if
 # it uses something not listed, rather than renaming it to match this list.
-KNOWN_KEY_NAMES = ("GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY")
+KNOWN_KEY_NAMES = (
+    "OPENROUTER_API_KEY",  # DAT baseline: judge + embeddings
+    "JEV_API_KEY",  # JevFusion extension
+    "GOOGLE_API_KEY",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+)
 
 
 def check(name):
