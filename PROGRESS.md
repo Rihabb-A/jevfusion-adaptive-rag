@@ -4,8 +4,8 @@ A detailed, cumulative record of everything done in this project: what we
 did, how, why, what it cost and what came out. Updated after every
 completed step until the project ends.
 
-**Last updated:** 20 October 2026, after Phase 4 Step N1 (NFCorpus
-downloaded and verified on branch `extension/nfcorpus`). Earlier the same
+**Last updated:** 20 October 2026, after Phase 4 Step N2 (graded
+metrics for NFCorpus, on branch `extension/nfcorpus`). Earlier the same
 day: the baseline PR (#1) was merged into `main` and `extension/jev` was
 pushed. **The SQuAD work (Phases 1 and 2) is complete;** the extension
 PR is for the team to open. **Phase 4 (BEIR NFCorpus) is in progress**,
@@ -68,8 +68,9 @@ paragraphs per retriever instead of top-1.
 | 2 | 2.11 | `extension/README.md`, verification, PR and Issue 3 text | done; **pushed (approved 20 Oct); PR to open** | free |
 | 4 | N0 | NFCorpus plan (no downloads, code or API calls) | done; plan and 4 decisions approved (§12) | free |
 | 4 | N1 | Protect SQuAD data; download and verify NFCorpus | done: **verified, matches BEIR; SQuAD files unchanged** | free |
-| 4 | N2 | Graded-relevance metrics + tests | **next, awaiting approval** | free |
-| 4 | N3-N11 | NFCorpus retrieval, baselines, judges, analysis, docs | to do | ~$0.55 est. |
+| 4 | N2 | Graded-relevance metrics + tests | done: **matches pytrec_eval (BEIR's scorer) exactly** | free |
+| 4 | N3 | BM25 + dense retrieval on NFCorpus, sanity check vs BEIR | **next, awaiting approval** | ~$0.15-0.25 |
+| 4 | N4-N11 | Baselines, judges, analysis, docs | to do | ~$0.30 est. |
 | 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
 
 **Spend so far: $1.383 of $20** (see §8).
@@ -1112,3 +1113,78 @@ between splits):
 gains as in BEIR / pytrec_eval, Recall@10, MRR@10, P@1 with relevant =
 grade >= 1) in a new module, tested on hand-built examples, without
 changing the SQuAD metric code.
+
+**Git (N1):** commit `ce144bc` on `extension/nfcorpus` (not pushed).
+
+### N2 Graded-relevance metrics (free)
+
+**What and why:** the SQuAD metrics (`baseline/evaluate.py`) assume one
+gold paragraph per question. NFCorpus has many relevant documents per
+query with grades 1 and 2, so a separate module was written next to the
+SQuAD code; **no existing file was modified**.
+
+**Files created:** `extension/graded_metrics.py`,
+`tests/test_graded_metrics.py`. **Modified:** only `PROGRESS.md`.
+
+**Definitions** (documented in the module; matching BEIR, which scores
+with `pytrec_eval` / `trec_eval`):
+
+| Metric | Definition |
+|---|---|
+| Relevant | judged grade >= 1 (trec_eval default); unjudged and grade 0 = not relevant |
+| **nDCG@10** (primary) | DCG@10 / IDCG@10, DCG = sum of grade_i / log2(i + 1) over ranks 1-10; **linear gain** (the grade itself, as trec_eval's `ndcg_cut`, not 2^grade - 1); IDCG from the query's judged grades sorted high to low, cut at 10 |
+| Recall@10 | relevant documents in the top 10 / all relevant documents of the query |
+| MRR@10 | 1 / rank of the first relevant document within the top 10, else 0 (BEIR's MRR@k) |
+| P@1 | 1 if the top document is relevant, else 0 |
+
+Scores are averaged over the queries with judgments (all 323 test and 324
+dev queries). Per-query arrays are returned so the existing paired
+bootstrap (`evaluate.paired_bootstrap_ci`) can be reused. Ranking reuses
+`jev_judge.topk_indices` (stable sort, ties in corpus order).
+
+**Two documented differences from trec_eval, both without effect here:**
+trec_eval breaks score ties by document id, we by corpus order (ties are
+rare with real-valued scores; to be measured in N3 where BM25 may give
+zero scores to most documents); BEIR drops retrieved documents whose id
+equals the query id, which never happens in NFCorpus (PLAIN-* vs MED-*).
+
+**Tests** (10 new, hand-computed values): perfect ranking = 1; a worked
+nDCG example (0, 2, 1 against judged {2, 1}: 1.761860 / 2.630930 =
+0.669672); linear-not-exponential gain; ideal cut at 10 when a query has 12
+relevant; grade 0 and unjudged ignored; recall denominator = all relevant
+(10/12); MRR cut at 10; P@1; an end-to-end score matrix including a tie;
+error when a query has no judgments.
+
+**Independent cross-check against `pytrec_eval`** (BEIR's actual scorer,
+v0.5.11, installed only in the session scratchpad, not a project
+dependency), per query, on all 4 metrics:
+
+| Scenario | Queries | nDCG@10 mean (ours = pytrec_eval) | Max per-query difference |
+|---|---:|---:|---:|
+| Real NFCorpus test labels, random scores | 323 | 0.007316 | 2.8e-17 |
+| Real NFCorpus test labels, grade-boosted scores | 323 | 0.804172 | 2.2e-16 |
+| Synthetic labels with grades 0 / 1 / 2 | 200 | 0.147192 | 1.7e-16 |
+
+Recall@10, MRR@10 and P@1 matched exactly (difference 0) in all three.
+(MRR@10 was compared with pytrec_eval's `recip_rank` on the top-10 run.)
+
+**Problem encountered:** one test failed on the first run because the
+hand-typed constant was 0.669670 instead of 0.669672 (the code was right:
+1.761860 / 2.630930 = 0.669672). The constant was corrected and the
+calculation is shown in the test.
+
+**SQuAD protection:** all 18 SQuAD data and cache files are still
+byte-identical to the N1 backup; `git diff` shows no change in
+`baseline/`, `results/` or the existing extension modules.
+
+**Tests:** **87 passed** (77 existing + 10 new). **Cost:** $0. **Project
+total: $1.383 of $20** (unchanged).
+
+**Next: Step N3 (needs approval; paid, about $0.15-0.25).** Score all
+3,633 NFCorpus documents for the 324 dev and 323 test queries with the
+same retrievers as SQuAD: BM25 (free) on title + text, then
+`text-embedding-3-large` embeddings (about 0.9-1.0M tokens at $0.13 / 1M),
+cached under new NFCorpus-only names so no SQuAD cache is touched (the
+shared embedding cache file is backed up). Sanity check: our BM25
+nDCG@10 against BEIR's published BM25 result for NFCorpus; report score
+ties in the top 10.
