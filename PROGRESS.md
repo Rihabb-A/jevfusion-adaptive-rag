@@ -1190,3 +1190,149 @@ cached under new NFCorpus-only names so no SQuAD cache is touched (the
 shared embedding cache file is backed up). Sanity check: our BM25
 nDCG@10 against BEIR's published BM25 result for NFCorpus; report score
 ties in the top 10.
+
+**Approved 20 Oct 2026:** autonomous execution of N3-N10 within the
+approved methodology, local commits only, at most $2 additional NFCorpus
+spend; stop on any serious blocker.
+
+### N3 BM25 and dense retrieval on NFCorpus (done)
+
+**Objective:** score the full 3,633-document corpus for every dev and
+test query with the same two retrievers as SQuAD, check BM25 against the
+published BEIR baseline, and understand where each retriever is strong.
+
+**State checked before starting:** branch `extension/nfcorpus`; ledger
+$1.3834 with no NFCorpus spend; both API keys set; 18/18 SQuAD files
+byte-identical to the backup; 87 tests passing.
+
+**Implemented** (`extension/nfcorpus.py`, new): `load_split` (BEIR data
+for `nfcorpus-dev` / `nfcorpus-test`; queries sorted by id; document text
+= title + text); `retrieve` (reuses `baseline.retrieve.bm25_scores` and
+`embed_batch` unchanged); `NFCorpusEmbeddingCache` (the baseline cache
+class, but in its own file under `data/cache/nfcorpus/`, so the shared
+SQuAD embedding file is never rewritten); a fingerprint of query and
+document order saved with each score matrix and checked on load; an
+NFCorpus budget guard (stops if NFCorpus spend would pass $2) on top of
+the project's $20 check; embeddings saved every 10 batches and verified
+on disk after the run. Analysis: `extension/nfcorpus_analysis.py`
+(`retrieval` subcommand). Tests: `tests/test_nfcorpus.py` (6).
+
+**Commands:**
+
+```
+python -m extension.nfcorpus retrieve --set nfcorpus-dev --bm25-only
+python -m extension.nfcorpus retrieve --set nfcorpus-test --bm25-only
+python -m extension.nfcorpus retrieve --set nfcorpus-dev     # embeds corpus + dev queries
+python -m extension.nfcorpus retrieve --set nfcorpus-test    # embeds test queries
+python -m extension.nfcorpus_analysis retrieval              # one diagnostic row needs snowballstemmer
+```
+
+**Splits:** dev (324 queries) and test (323); train unused.
+**Configuration:** BM25 = `rank_bm25.BM25Okapi` (k1 1.5, b 0.75),
+lowercase `\w+` tokens, no stemming or stop words (exactly the SQuAD
+setting); dense = `text-embedding-3-large` via OpenRouter, cosine; both
+on title + text; full corpus scored; ties broken by corpus order.
+
+**Cost:** 3,916 unique texts embedded for dev (3,633 documents + dev
+queries; duplicate texts embedded once), 1,230,376 tokens, **$0.1599**;
+test queries 1,705 tokens, $0.0002. **N3 total $0.1602** (pre-run
+estimate $0.28 including a 50% margin). NFCorpus total $0.1602;
+**project total $1.5436 of $20**. Score matrices and the NFCorpus
+embedding cache are backed up outside OneDrive
+(`jevfusion-backups/nfcorpus-cache-after-n3`). SQuAD: 18/18 files
+byte-identical after the embedding run.
+
+**Results** (`results/nfcorpus/retrieval.csv`):
+
+| Set | Retriever | nDCG@10 | Recall@10 | MRR@10 | P@1 | R@100 | R@1000 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| dev | BM25 | 0.2664 | 0.1099 | 0.4646 | 0.3889 | 0.2057 | 0.3861 |
+| dev | Dense | 0.3915 | 0.2031 | 0.5918 | 0.4969 | 0.4093 | 0.7350 |
+| **test** | **BM25** | **0.3067** | 0.1522 | 0.5097 | 0.4272 | 0.2368 | 0.4232 |
+| **test** | **Dense** | **0.4220** | 0.2108 | 0.6253 | 0.5418 | 0.3912 | 0.7296 |
+
+**BM25 vs the published baseline.** Reference: Anserini (Pyserini) BM25
+"flat" run, which also indexes title + text in one field, on BEIR v1.0.0
+NFCorpus test: nDCG@10 **0.3218**, R@100 0.2457, R@1000 0.3704
+(castorini/anserini, `docs/reproduce/from-document-collection/beir-v1.0.0-nfcorpus.flat.md`;
+its multifield run gives 0.3254, the BEIR paper's 0.325). Ours is **1.5
+points lower**. Diagnosis, adding Anserini's choices one at a time
+(diagnostic only; `results/nfcorpus/bm25_diagnostics.csv`):
+
+| BM25 variant (test) | nDCG@10 | R@100 (matched docs only) |
+|---|---:|---:|
+| Ours (SQuAD setting) | 0.3067 | 0.2331 |
+| k1 0.9, b 0.4 (Anserini defaults) | 0.3052 | 0.2348 |
+| + Lucene stop words | 0.3059 | 0.2361 |
+| **+ Porter stemming** | **0.3218** | **0.2471** |
+| + Lucene idf / tf formula | 0.3208 | 0.2462 |
+
+**Stemming accounts for the whole gap:** with it our implementation
+reaches Anserini's 0.3218 exactly (dev shows the same pattern: 0.2664 to
+0.2890). The BM25 code is therefore correct; the experiment keeps the
+unstemmed SQuAD setting as approved, so **our BM25 is a slightly weaker
+but methodologically consistent baseline, not an exact BEIR
+reproduction**. Our higher R@1000 (0.4232 vs 0.3704) is an artifact of
+ranking the full corpus: queries with few matching terms get zero-score
+documents in corpus order, which an inverted-index run would not return;
+counting only matching documents gives R@1000 0.3678, in line with
+Anserini.
+
+**Zero-match queries:** 79 test queries match fewer than 10 documents
+with BM25, and **25 match none** (e.g. "myelopathy": every score is 0, so
+BM25's "top results" are just the first documents of the corpus). This
+matters later: for these queries BM25's top-1, which DAT and Jev judge,
+is arbitrary, and min-max normalization turns an all-zero BM25 row into
+zeros, so fusion falls back to dense alone.
+
+**Dense vs BM25 (test, paired, 10,000 resamples):** dense is much
+stronger: nDCG@10 +0.1154 [+0.0918, +0.1395], Recall@10 +0.0586 [+0.0430,
++0.0762], MRR@10 +0.1155 [+0.0758, +0.1568], P@1 +0.1146 [+0.0619,
++0.1703]. Per query: dense better on 167, BM25 on 60, tie 96. The two
+are complementary: their top-10 lists share only 3.0 documents on
+average, and the top-1 is the same for 26.9% of queries (SQuAD: 66.8%).
+
+**By query type (test, mean nDCG@10):**
+
+| Queries | n | BM25 | Dense | Dense better on |
+|---|---:|---:|---:|---:|
+| 1 word | 103 | 0.3739 | 0.4564 | 34% |
+| 2-3 words | 89 | 0.3028 | 0.3901 | 49% |
+| 4+ words (mostly article titles) | 131 | 0.2564 | 0.4167 | 67% |
+| BM25 matches < 10 documents | 79 | 0.2528 | 0.3598 | 34% |
+| 1-5 relevant documents | 86 | 0.2850 | 0.3548 | 24% |
+| 6-30 relevant | 132 | 0.2398 | 0.3343 | 55% |
+| 31+ relevant | 105 | 0.4085 | 0.5873 | 70% |
+
+Dense's advantage grows with longer, descriptive queries and with many
+relevant documents. On single-word and few-relevant queries dense wins
+per query only 24-34% of the time (the rest are ties or BM25 wins),
+though dense still has the higher mean.
+
+**Examples.** Dense wins most: "myelopathy" (1 relevant): BM25 matches
+nothing and returns arbitrary statin papers; dense finds the vegan
+spinal-cord degeneration case (grade 1) at rank 1. BM25 wins most:
+"Panama" (2 relevant): BM25 matches the literal word in the Kuna cocoa
+studies (both relevant at ranks 1-2); dense drifts to pancreatic-cancer
+papers.
+
+**What it means and how it compares with SQuAD:** on SQuAD BM25 and dense
+were nearly equal (P@1 0.761 vs 0.773); here dense is 11.5 nDCG points
+ahead. The best fusion weight is therefore likely to lean strongly toward
+dense, and the transferred SQuAD alpha (0.6) may be suboptimal (tested in
+N4). **Cannot conclude yet:** anything about the judges.
+
+**Problems:** the first guessed URLs for the Anserini pages returned 404;
+the repository tree was listed through GitHub's API and the correct pages
+found. The stemming diagnostic needed `snowballstemmer`, installed in the
+session scratchpad only (not a project dependency); without it that
+diagnostic row is skipped. A long shell command with an embedded text
+block failed to parse once; nothing had been written, and the record was
+re-appended from a file.
+
+**Tests:** 93 passed (87 + 6 new). **Limitations:** BM25 unstemmed by
+design; dense quality not compared with a published
+text-embedding-3-large NFCorpus number (none verified).
+
+**Next:** N4, the zero-judge baselines (BM25, dense, RRF, fixed alpha 0.6
+transferred from SQuAD, and an alpha tuned on dev only).

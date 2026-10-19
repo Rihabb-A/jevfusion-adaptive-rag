@@ -16,3 +16,5 @@ timestamp_utc,component,model,calls,input_tokens,cost_usd,note
 2026-10-19T22:13:15+00:00,latency_dat,openai/gpt-4o-mini,102,73771,0.01124925,"step 2.10 sequential latency, 102 calls incl. warm-up"
 2026-10-19T22:13:15+00:00,latency_jev_j1,jev-1.13.0,102,113995,0.00478779,"step 2.10 sequential latency, 102 calls incl. warm-up"
 2026-10-19T22:13:15+00:00,latency_jev_j3,jev-1.13.0,102,285857,0.01200599,"step 2.10 sequential latency, 102 calls incl. warm-up"
+2026-10-19T23:32:05+00:00,dense_embeddings,openai/text-embedding-3-large,62,1230376,0.15994888,nfcorpus nfcorpus-dev corpus+queries: 62 batches
+2026-10-19T23:32:50+00:00,dense_embeddings,openai/text-embedding-3-large,6,1705,0.00022165,nfcorpus nfcorpus-test corpus+queries: 6 batches
