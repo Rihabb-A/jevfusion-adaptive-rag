@@ -16,6 +16,7 @@ margin also fixed before looking: NONINFERIORITY_MARGIN.
 
     python -m extension.jev_fusion --set tune --compare-mappings   # step 2.5
     python -m extension.jev_fusion --set test                      # step 2.6
+    python -m extension.jev_fusion --set tune --compare-j3         # step 2.7
 """
 
 import argparse
@@ -44,6 +45,14 @@ ROOT = Path(__file__).resolve().parent.parent
 MAPPINGS = ("top_level", "round")
 CHOSEN_MAPPING = "top_level"  # Step 2.5, tune set: P@1 0.8363 vs 0.8356 for "round"
 NONINFERIORITY_MARGIN = 0.01  # Step 2.6: Jev "matches" DAT if the P@1 CI lies above -1 point
+
+# Step 2.7: ways to turn k judgments per retriever into one alpha. Chosen on
+# the tune set by the rule agreed before looking: tune P@1, then MRR@20,
+# then the first option (closest to DAT).
+J3_OPTIONS = ("A_mean_dat", "B_smooth", "C_rank_weighted_dat")
+CHOSEN_J3_OPTION = "C_rank_weighted_dat"  # Step 2.7, tune P@1: C 0.8147, B 0.8126, A 0.8098 (J1: 0.8363)
+SMOOTH_EPS = 0.05  # plan v3 §4.1, fixed (not tuned)
+RANK_WEIGHTS = (1.0, 1 / 2, 1 / 3)
 
 
 def to_dat_score(judgment, mapping):
@@ -78,6 +87,53 @@ def j1_alphas(judgments, mapping):
         dat_alpha(to_dat_score(j["dense_1"], mapping), to_dat_score(j["bm25_1"], mapping))
         for j in judgments
     ])
+
+
+def round_half_up(value):
+    return int(math.floor(value + 0.5))
+
+
+def _per_retriever(judgment, method, field):
+    """[dense_1, dense_2, ...] (or bm25_*) values of `field`, rank order."""
+    slots = sorted((s for s in judgment if s.startswith(method + "_")), key=lambda s: int(s.split("_")[1]))
+    return [judgment[s][field] for s in slots]
+
+
+def multi_alpha(judgment, option):
+    """Alpha from all judged paragraphs of one question (any k):
+
+    A_mean_dat:          mean of most likely levels, rounded -> DAT Eq. 6
+    B_smooth:            J = mean decimal score / 5 per retriever ->
+                         (J_D + eps) / (J_D + J_B + 2 eps), plan v3 §4.1, no rounding
+    C_rank_weighted_dat: rank-weighted mean of levels (1, 1/2, 1/3), rounded -> DAT Eq. 6
+
+    With k = 1, A and C reduce exactly to J1 (top_level + DAT rule)."""
+    if option == "B_smooth":
+        j_dense = np.mean(_per_retriever(judgment, "dense", "score")) / 5
+        j_bm25 = np.mean(_per_retriever(judgment, "bm25", "score")) / 5
+        return float((j_dense + SMOOTH_EPS) / (j_dense + j_bm25 + 2 * SMOOTH_EPS))
+    if option == "A_mean_dat":
+        def combine(levels):
+            return round_half_up(np.mean(levels))
+    elif option == "C_rank_weighted_dat":
+        def combine(levels):
+            weights = RANK_WEIGHTS[:len(levels)]
+            return round_half_up(np.dot(weights, levels) / sum(weights))
+    else:
+        raise ValueError(f"unknown option {option!r}")
+    return dat_alpha(combine(_per_retriever(judgment, "dense", "top_level")),
+                     combine(_per_retriever(judgment, "bm25", "top_level")))
+
+
+def multi_alphas(judgments, option):
+    return np.array([multi_alpha(j, option) for j in judgments])
+
+
+def choose_option(rows_by_option):
+    """The pre-declared rule: P@1, then MRR@20, then the first option."""
+    order = {name: i for i, name in enumerate(J3_OPTIONS)}
+    return max(rows_by_option, key=lambda o: (rows_by_option[o]["p_at_1"],
+                                              rows_by_option[o]["mrr_at_20"], -order[o]))
 
 
 def evaluate_alphas(set_name, methods):
@@ -195,7 +251,23 @@ def main():
     parser = argparse.ArgumentParser(description="JevFusion alphas and evaluation")
     parser.add_argument("--set", choices=["test", "tune"], required=True)
     parser.add_argument("--compare-mappings", action="store_true", help="step 2.5: choose the mapping on tune")
+    parser.add_argument("--compare-j3", action="store_true", help="step 2.7: choose the J3 alpha option on tune")
     args = parser.parse_args()
+
+    if args.compare_j3:
+        j3 = load_judgments(args.set, 3)
+        methods = {
+            "Fixed hybrid (alpha=0.6)": 0.6,
+            f"Jev J1 ({CHOSEN_MAPPING}), reference": j1_alphas(load_judgments(args.set, 1), CHOSEN_MAPPING),
+        }
+        for option in J3_OPTIONS:
+            methods[f"Jev J3 {option}"] = multi_alphas(j3, option)
+        rows = evaluate_alphas(args.set, methods)
+        print_rows(rows, f"SQuAD {args.set}, {len(j3)} questions")
+        by_option = {o: next(r for r in rows if r["method"] == f"Jev J3 {o}") for o in J3_OPTIONS}
+        print(f"\nChosen J3 option (tune P@1, then MRR@20, then A): {choose_option(by_option)}")
+        write_csv(rows, ROOT / "results" / f"jev_j3_options_{args.set}.csv")
+        return
 
     judgments = load_judgments(args.set, 1)
     if args.compare_mappings:
