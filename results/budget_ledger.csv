@@ -20,3 +20,5 @@ timestamp_utc,component,model,calls,input_tokens,cost_usd,note
 2026-10-19T23:32:50+00:00,dense_embeddings,openai/text-embedding-3-large,6,1705,0.00022165,nfcorpus nfcorpus-test corpus+queries: 6 batches
 2026-10-19T23:45:45+00:00,dat_judge,openai/gpt-4o-mini,20,21263,0.00322545,"nfcorpus-dev, 20 questions, 8 workers"
 2026-10-19T23:47:29+00:00,dat_judge,openai/gpt-4o-mini,323,337074,0.05114250,"nfcorpus-test, 323 questions, 8 workers"
+2026-10-19T23:50:39+00:00,jev_judge_k1,jev-1.13.0,20,29695,0.00124719,"nfcorpus-dev, 20 questions, 8 workers; cost = input tokens x $0.042/M list price"
+2026-10-19T23:52:06+00:00,jev_judge_k1,jev-1.13.0,323,473553,0.01988923,"nfcorpus-test, 323 questions, 8 workers; cost = input tokens x $0.042/M list price"

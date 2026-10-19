@@ -73,8 +73,8 @@ paragraphs per retriever instead of top-1.
 | 4 | N4 | Zero-judge baselines (BM25, dense, RRF, fixed 0.6, dev-tuned alpha) | done: dev alpha 0.8 = dense; 0.6 hurts; RRF weakest | free |
 | 4 | N5 | Judge pipeline for named datasets + SQuAD regression check | done: 10/10 SQuAD result files byte-identical | free |
 | 4 | N6 | DAT (GPT-4o-mini) on NFCorpus | done: **DAT below dev-tuned fixed alpha** (-1.32 nDCG) | $0.054 |
-| 4 | N7 | Jev J1 on NFCorpus | **in progress** | ~$0.03 |
-| 4 | N8 | Jev J3 on NFCorpus | to do | ~$0.07 |
+| 4 | N7 | Jev J1 on NFCorpus | done: **J1 = DAT (+0.53 n.s.) at 2.6x lower cost; below fixed 0.8** | $0.021 |
+| 4 | N8 | Jev J3 on NFCorpus | **in progress** | ~$0.07 |
 | 4 | N9 | Full analysis | to do | free |
 | 4 | N10 | Fair latency | to do | ~$0.05 |
 | 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
@@ -1654,3 +1654,140 @@ test now checks both the tied and the untied case. **Tests:** 104 passed
 group sizes limit fine-grained conclusions.
 
 **Next:** N7, Jev J1 on the same candidates (pilot on dev, then test).
+
+**Git (N6):** commit `bf3d9ff` on `extension/nfcorpus` (not pushed).
+
+### N7 Jev J1 on NFCorpus (done)
+
+**Objective (RQ1 on a second dataset):** does Jev, judging the same two
+top-1 documents as DAT with the SQuAD-chosen `top_level` mapping and DAT's
+Eq. 6 unchanged, match or beat GPT-4o-mini at lower cost?
+
+**Commands:**
+
+```
+python -m extension.nfcorpus_judges jev --k 1 --set nfcorpus-dev --limit 20   # pilot
+python -m extension.nfcorpus_judges jev --k 1 --set nfcorpus-test             # full test
+python -m extension.nfcorpus_analysis j1                                      # analysis
+```
+
+**Pilot (20 dev queries):** 20/20 valid, all served by `jev-1.13.0`, mean
+1,485 input tokens (max 2,669), $0.000062 per query, all on disk.
+**Full test run:** 323/323 valid, 0 invalid, 0 HTTP errors, all on disk;
+473,553 input tokens, 1.2 min. **Cost:** pilot $0.0012 + test $0.0199 =
+**$0.0211**. NFCorpus total $0.2357; **project total $1.6191 of $20**.
+Per-query levels and alphas: `results/nfcorpus/jev_j1_alphas_test.csv`.
+Code added: `j1` analysis (judge-vs-judge disagreement, query length,
+rubric alignment for Jev's levels and decimal scores) in
+`extension/nfcorpus_analysis.py`.
+
+**Results (test, 323 queries):**
+
+| Method | nDCG@10 | Recall@10 | MRR@10 | P@1 | Judge $ / query |
+|---|---:|---:|---:|---:|---:|
+| Dense only | 0.4220 | 0.2108 | 0.6253 | 0.5418 | $0 |
+| Fixed 0.8 (dev-tuned) | **0.4252** | 0.2110 | **0.6424** | **0.5604** | $0 |
+| DAT (GPT-4o-mini) | 0.4120 | 0.2042 | 0.6308 | 0.5480 | $0.000158 |
+| **Jev J1** | **0.4173** | 0.2069 | 0.6372 | 0.5542 | **$0.000062** |
+
+| Jev J1 minus | nDCG@10 [95% CI] | Recall@10 | MRR@10 | P@1 |
+|---|---|---|---|---|
+| **DAT (GPT-4o-mini)** | **+0.0053 [-0.0028, +0.0135]** | +0.0027 [-0.0027, +0.0083] | +0.0065 [-0.0103, +0.0235] | +0.0062 [-0.0217, +0.0341] |
+| Dense only | -0.0047 [-0.0151, +0.0057] | -0.0039 [-0.0097, +0.0014] | +0.0120 [-0.0088, +0.0328] | +0.0124 [-0.0186, +0.0433] |
+| Fixed 0.8 (dev) | -0.0079 [-0.0159, +0.0000] | -0.0041 [-0.0104, +0.0019] | -0.0052 [-0.0232, +0.0122] | -0.0062 [-0.0372, +0.0217] |
+| Fixed 0.6 (SQuAD) | +0.0138 [+0.0042, +0.0239] | +0.0030 [-0.0024, +0.0086] | +0.0176 [-0.0033, +0.0393] | +0.0217 [-0.0124, +0.0557] |
+| RRF | +0.0475 [+0.0318, +0.0638] | +0.0282 [+0.0178, +0.0399] | +0.0355 [+0.0057, +0.0657] | +0.0279 [-0.0155, +0.0712] |
+| BM25 only | +0.1107 [+0.0902, +0.1322] | +0.0547 [+0.0401, +0.0713] | +0.1275 [+0.0935, +0.1624] | +0.1269 [+0.0805, +0.1734] |
+
+**What happened.**
+1. **J1 vs DAT:** +0.53 nDCG@10 points, **not significant** (CI [-0.28,
+   +1.35]), at **2.6x lower judge cost** ($0.000062 vs $0.000158 per
+   query). Per query: J1 better on 54, worse on 43, same on 226. (The
+   1-point non-inferiority margin was pre-agreed for SQuAD's P@1, not for
+   NFCorpus; read descriptively, the whole CI lies above -1 point.)
+2. **Neither judge beats the zero-judge reference:** J1 is -0.79 below the
+   dev-tuned fixed alpha (CI upper end 0.0000, borderline) and -0.47 below
+   dense (n.s.); it is significantly above fixed 0.6 (+1.38), RRF and BM25.
+3. **The SQuAD mechanism does not repeat.** On SQuAD, Jev won because it
+   almost never pushed alpha the wrong way (1.3% vs DAT 8.4%). Here, on the
+   83 queries where exactly one top-1 is relevant, J1 leans the right way
+   68.7% (DAT 79.5%), neutral 15.7% (DAT 6.0%), wrong way 15.7% (DAT
+   14.5%). When only **BM25's** top-1 is relevant, J1 leans toward BM25 in
+   only **30.4%** of cases (DAT 56.5%); its mean alpha there is 0.522.
+4. **Where J1's small edge comes from:** J1 and DAT pick the same alpha on
+   51.1% of queries. Where J1 leans more toward dense (101 queries), it is
+   better 45 times and worse 23 (mean +0.0304); where it leans more toward
+   BM25 (57), it is better only 9 times and worse 20 (mean -0.0238). J1's
+   gain is from leaning toward the stronger retriever (dense) more often,
+   not from better per-query discrimination.
+
+**Alpha distribution (J1):** 0.5 for **46.7%** (DAT 35.0%), 1.0 for 35.6%,
+0.0 for 8.7%, mean 0.651. Most common level pairs (dense, BM25): 5/5 (79),
+5/3 (42), 3/3 (27), 4/4 (23), 5/1 (18), 5/4 (18).
+
+**nDCG@10 by top-1 relevance group:**
+
+| Group | n | Jev J1 | DAT | Dense only | Fixed 0.8 (dev) |
+|---|---:|---:|---:|---:|---:|
+| Same document | 87 | 0.4734 | 0.4734 | 0.4905 | 0.4911 |
+| Different, both relevant | 53 | 0.7769 | 0.7577 | 0.7791 | 0.7826 |
+| Only dense top-1 relevant | 60 | 0.5433 | 0.5265 | 0.5839 | 0.5466 |
+| Only BM25 top-1 relevant | 23 | 0.4424 | 0.4843 | 0.3120 | 0.4579 |
+| Different, neither relevant | 100 | 0.0966 | 0.0901 | 0.1013 | 0.0981 |
+
+**Rubric alignment** (646 judged top-1 documents):
+
+| Judge | Spearman vs grade | Mean score: grade 0 / 1 / 2 | Scored >= 4: grade 0 / 1 / 2 |
+|---|---:|---|---|
+| DAT (GPT-4o-mini) | 0.433 | 2.44 / 4.09 / 4.02 | 38% / 81% / 75% |
+| **Jev J1, most likely level** | **0.473** | 2.52 / 4.09 / **4.55** | 35% / 68% / **93%** |
+| Jev J1, decimal score | **0.494** | 2.50 / 3.58 / 4.26 | 18% / 37% / 69% |
+
+Jev's judgments agree better with the official labels and, unlike DAT,
+**separate highly relevant (grade 2) from partially relevant (grade 1)**
+documents. Both judges still give 4-5 to about a third of grade-0
+documents (possibly unlabeled relevant documents; cannot be told apart).
+
+**nDCG@10 by query length:**
+
+| Queries | n | Jev J1 | DAT | Dense only | Fixed 0.8 (dev) |
+|---|---:|---:|---:|---:|---:|
+| 1 word | 103 | 0.4721 | 0.4744 | 0.4564 | 0.4731 |
+| 2-3 words | 89 | 0.3848 | 0.3647 | 0.3901 | 0.3907 |
+| 4+ words | 131 | 0.3964 | 0.3951 | 0.4167 | 0.4110 |
+
+Short topical queries are not a particular weakness of Jev: on one-word
+queries both judges match the best fixed weight and beat dense; both fall
+behind dense on longer, title-style queries, where dense is strongest.
+
+**Zero-match BM25 queries (25):** Jev's mean level for BM25's arbitrary
+top-1 is 0.04; alpha 1.0 for 52% (mean 0.772). The rest stay at 0.5 when
+Jev also scores the dense document 0 (Eq. 6: 0 vs 0 gives 0.5).
+
+**Examples vs DAT.** Gain: "blood clots" (both top-1 relevant): J1 kept
+alpha 0.5 (0.789) where DAT went to 0.0 (0.220); "prenatal vitamins": J1
+alpha 1.0 (0.258 vs 0.000). Loss: "The Actual Benefit of Diet vs. Drugs":
+BM25's top-1 is grade 2, but J1 went to alpha 1.0 (0.168 vs DAT's 0.658);
+"Keeping Your Hands Warm With Citrus": J1 alpha 0.0 toward an irrelevant
+hand-rub study (0.118 vs 0.504).
+
+**Why might it have happened (plausible, partly supported):** Jev judges
+the documents better (rubric alignment) but DAT's Eq. 6 turns equal levels
+into 0.5, and with Jev's sharper levels (more 5/5 and 3/3 ties) that
+happens on 47% of queries, where 0.5 is worse than leaning to dense. The
+judge's quality is bottlenecked by the alpha rule, not only by judgment.
+(Hypothesis; a rule with a dense-leaning default would test it, but that
+would be a methodology change and was not run.)
+
+**What it means for RQ1:** on NFCorpus, Jev matches DAT's quality (no
+significant difference, point estimate slightly better) at 2.6x lower
+cost, so the cost advantage generalizes; the quality *advantage* seen on
+SQuAD (+1.64 points, significant) does **not** generalize. **Cannot
+conclude** equivalence (a non-significant difference is not proof of
+equality; the CI allows -0.28 to +1.35 points), nor that Jev's better
+rubric alignment would help under a different alpha rule.
+
+**Problems:** none. **Tests:** 104 passed. **Limitations:** 323 queries;
+the only-BM25-relevant group has 23.
+
+**Next:** N8, Jev J3 (top-3 per retriever, option C unchanged).

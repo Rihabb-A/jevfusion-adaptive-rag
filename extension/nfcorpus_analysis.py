@@ -395,10 +395,66 @@ def examples(per, per_ref, alphas, rows, name, ref_name, n=2):
     print(f"  {name} vs {ref_name} per query: better {np.sum(diff > 1e-12)}, worse {np.sum(diff < -1e-12)}, same {np.sum(np.abs(diff) <= 1e-12)}")
 
 
+def by_query_length(per_by_method):
+    _, qs, _ = load_split(TEST)
+    words = np.array([len(q["question"].split()) for q in qs])
+    print("\n== nDCG@10 by query length (test) ==")
+    print(f"  {'queries':<12} {'n':>4} " + " ".join(f"{m[:17]:>17}" for m in per_by_method))
+    for label, mask in (("1 word", words == 1), ("2-3 words", (words >= 2) & (words <= 3)), ("4+ words", words >= 4)):
+        print(f"  {label:<12} {int(mask.sum()):>4} " + " ".join(f"{per_by_method[m]['ndcg@10'][mask].mean():>17.4f}" for m in per_by_method))
+
+
+def judge_disagreement(a_name, a_alpha, a_per, b_name, b_alpha, b_per):
+    """Where two judges chose different alphas, which one gave the better
+    nDCG@10, split by which way the first judge moved relative to the second."""
+    differ = ~np.isclose(a_alpha, b_alpha)
+    diff = a_per["ndcg@10"] - b_per["ndcg@10"]
+    print(f"\n== {a_name} vs {b_name}: same alpha on {np.mean(~differ):.1%} of queries ==")
+    for label, mask in ((f"{a_name} more toward dense", differ & (a_alpha > b_alpha)),
+                        (f"{a_name} more toward BM25", differ & (a_alpha < b_alpha))):
+        print(f"  {label:<30} n={int(mask.sum()):>3}: {a_name} better {np.sum(diff[mask] > 1e-12):>3}, "
+              f"worse {np.sum(diff[mask] < -1e-12):>3}, same {np.sum(np.abs(diff[mask]) <= 1e-12):>3}; "
+              f"mean nDCG@10 change {diff[mask].mean() if mask.any() else 0:+.4f}")
+    print(f"  overall per query: {a_name} better {np.sum(diff > 1e-12)}, worse {np.sum(diff < -1e-12)}, same {np.sum(np.abs(diff) <= 1e-12)}")
+
+
+def jev_levels(judgments, k):
+    """Per query: list of (slot, most likely level, decimal score)."""
+    return [[(slot, j[slot]["top_level"], j[slot]["score"]) for slot in j] for j in judgments]
+
+
+def j1_analysis():
+    """N7: Jev J1 on NFCorpus test, against DAT and the zero-judge baselines."""
+    from extension.nfcorpus_judges import dat_alphas_nf, jev_alphas_nf
+    dat_alpha, dat_scores = dat_alphas_nf(TEST)
+    j1_alpha, judgments = jev_alphas_nf(TEST, 1)
+    per_zero = zero_judge_per_query()
+    per_dat = per_query_for_alpha(TEST, dat_alpha)
+    per = judge_quality("Jev J1", j1_alpha, per_zero, extra={"DAT (GPT-4o-mini)": per_dat})
+    levels = [(j["dense_1"]["top_level"], j["bm25_1"]["top_level"]) for j in judgments]
+    alpha_report(j1_alpha, levels)
+    groups, d_grade, b_grade, rows = top1_groups()
+    print_groups({"Jev J1": per, "DAT": per_dat, "Dense only": per_zero["Dense only"],
+                  "Fixed 0.8 (dev)": per_zero["Fixed 0.8 (dev)"]}, groups)
+    print_direction({"DAT": dat_alpha, "Jev J1": j1_alpha}, groups)
+    judge_disagreement("Jev J1", j1_alpha, per, "DAT", dat_alpha, per_dat)
+    by_query_length({"Jev J1": per, "DAT": per_dat, "Dense only": per_zero["Dense only"], "Fixed 0.8 (dev)": per_zero["Fixed 0.8 (dev)"]})
+    print("\n== Rubric alignment: judge score vs official grade of the judged top-1 documents ==")
+    rubric_alignment([(lv[0], g) for lv, g in zip(levels, d_grade)] + [(lv[1], g) for lv, g in zip(levels, b_grade)],
+                     "Jev J1 (most likely level)")
+    rubric_alignment([(j["dense_1"]["score"], g) for j, g in zip(judgments, d_grade)] +
+                     [(j["bm25_1"]["score"], g) for j, g in zip(judgments, b_grade)], "Jev J1 (decimal score)")
+    rubric_alignment([(s[0], g) for s, g in zip(dat_scores, d_grade)] + [(s[1], g) for s, g in zip(dat_scores, b_grade)], "DAT")
+    zero_bm25(j1_alpha, [lv[1] for lv in levels], "Jev BM25 level")
+    write_alpha_file("jev_j1", rows, j1_alpha, levels, d_grade, b_grade)
+    examples(per, per_dat, j1_alpha, rows, "Jev J1", "DAT")
+    return j1_alpha, per
+
+
 def main():
     parser = argparse.ArgumentParser(description="NFCorpus analyses")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("retrieval", "baselines", "dat"):
+    for name in ("retrieval", "baselines", "dat", "j1"):
         sub.add_parser(name)
     args = parser.parse_args()
     if args.command == "retrieval":
@@ -407,6 +463,8 @@ def main():
         baseline_analysis()
     elif args.command == "dat":
         dat_analysis()
+    elif args.command == "j1":
+        j1_analysis()
 
 
 if __name__ == "__main__":
