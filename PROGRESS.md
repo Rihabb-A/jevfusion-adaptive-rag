@@ -4,7 +4,7 @@ A detailed, cumulative record of everything done in this project: what we
 did, how, why, what it cost and what came out. Updated after every
 completed step until the project ends.
 
-**Last updated:** 19 October 2026, after Step 2.7.1 (J3 on the tune set).
+**Last updated:** 19 October 2026, after Step 2.7.2 (J3 on the test set).
 
 The formal deliverables are separate and are what graders read:
 `baseline/README.md` (DAT reproduction), `extension/README.md` (JevFusion,
@@ -53,23 +53,24 @@ paragraphs per retriever instead of top-1.
 | 2 | 2.5 | Jev J1 on full tune set; choose score mapping | done: **top_level** | $0.132 |
 | 2 | 2.6 | Jev J1 on test set, compare with DAT | done: **J1 beats DAT** | $0.141 |
 | 2 | 2.7.1 | J3 on tune set; choose alpha option | done: **C chosen; J3 below J1 on tune** | $0.335 |
-| 2 | 2.7.2 | J3 (option C) on test set, compare with J1 and DAT | **next, awaiting approval** | ~$0.35 |
-| 2 | 2.8 | Control: top-1 with J3's formula | to do | free (reuses J1) |
-| 2 | 2.9 | RRF baseline | to do | free |
+| 2 | 2.7.2 | J3 (option C) on test set, compare with J1 and DAT | done: **J3 < J1 (significant), J3 ≈ DAT** | $0.353 |
+| 2 | 2.8 | Control: top-1 with J3's formula | done by construction (option C with k=1 is exactly J1) | free |
+| 2 | 2.9 | RRF baseline | **next** | free |
 | 2 | 2.10 | Full comparison: quality, CIs, cost, fair latency | to do | small |
 | 2 | 2.11 | `extension/README.md`, PR, close Issue 3 | to do | free |
 | 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
 
-**Spend so far: $0.974 of $20** (see §8).
+**Spend so far: $1.327 of $20** (see §8).
 
 **Headline so far (test set, 2,996 questions):** Jev J1 P@1 **0.8899** vs
 DAT (GPT-4o-mini) 0.8735 vs fixed alpha 0.6 0.8571. Jev J1 beats DAT by
 +1.64 points P@1 (95% CI [+1.00, +2.27]) at less than half the cost per
 question.
 
-**Early RQ2 signal (tune set only):** judging the top-3 paragraphs per
-retriever (J3) is *worse* than top-1 (J1): best J3 option P@1 0.8147 vs J1
-0.8363. Diagnosed in §5, Step 2.7.1. The test-set run is pending approval.
+**RQ2 answer (confirmed on test):** judging the top-3 paragraphs per
+retriever (J3) is *worse* than top-1 (J1): P@1 0.8708 vs 0.8899, -1.90
+points (95% CI [-2.60, -1.23]), at 2.5x the cost. On single-gold SQuAD
+the extra paragraphs dilute the top-1 signal (§5, Steps 2.7.1-2.7.2).
 
 ---
 
@@ -415,6 +416,56 @@ the better signal; this supports DAT's own claim that the top-1 result is
 relevant documents per question (e.g. BEIR FiQA or NFCorpus), which is a
 limitation to state and possible future work.
 
+### 2.7.2 J3 (option C) on the test set (`python -m extension.jev_fusion --set test --j3`)
+
+Run as pre-registered, even though tune suggested J3 would lose: a
+confirmed negative result on test is stronger than a tune-only one.
+
+**Run:** 2,996/2,996 valid, all `jev-1.13.0`, no replies lost on disk this
+time, 12.8 min, mean 2,805 input tokens, $0.353 ($0.000118 per question).
+
+**Results** (`results/jev_j3_test.csv`):
+
+| Test set (2,996 questions) | P@1 | MRR@20 | Alpha acc. | Hybrid P@1 | Cost / question |
+|---|---:|---:|---:|---:|---:|
+| Fixed alpha 0.6 | 0.8571 | 0.9087 | 0.8975 | 0.6222 | $0 |
+| DAT (GPT-4o-mini) | 0.8735 | 0.9167 | 0.9169 | 0.6686 | $0.000110 |
+| **Jev J1** | **0.8899** | **0.9268** | **0.9356** | **0.7150** | **$0.000047** |
+| Jev J3 (option C) | 0.8708 | 0.9198 | 0.9219 | 0.6610 | $0.000118 |
+
+| Paired (same 2,996 questions) | P@1 diff, 95% CI | MRR@20 diff, 95% CI | Rank 1 gained / lost |
+|---|---|---|---|
+| J3 - J1 | **-0.0190 [-0.0260, -0.0123]** | -0.0070 [-0.0110, -0.0030] | 28 / 85 |
+| J3 - DAT | -0.0027 [-0.0097, +0.0047] | +0.0031 [-0.0012, +0.0076] | 58 / 66 |
+| J3 - fixed 0.6 | +0.0137 [+0.0060, +0.0217] | +0.0110 [+0.0064, +0.0157] | 91 / 50 |
+
+**P@1 by question group (test):**
+
+| Group | n | Fixed 0.6 | DAT | J1 | J3 |
+|---|---:|---:|---:|---:|---:|
+| Same paragraph | 2,001 | 0.9550 | 0.9550 | 0.9550 | 0.9550 |
+| Only dense right | 405 | 0.7284 | 0.8716 | **0.9531** | 0.8469 |
+| Only BM25 right | 369 | 0.8618 | 0.9106 | **0.9539** | 0.8862 |
+| Different, both wrong | 221 | **0.1991** | 0.0769 | 0.0769 | 0.1267 |
+
+**Conclusions:**
+- **RQ2 answered: no.** J3 is significantly worse than J1 on test (-1.90
+  points P@1, whole CI below 0), matching the tune-set diagnosis: with one
+  gold paragraph per question, a correct retriever's #2 and #3 are wrong
+  by construction and pull its score down.
+- J3 is statistically indistinguishable from DAT (CI spans 0) and still
+  significantly better than fixed 0.6, so it is not useless, just
+  dominated by J1: worse quality at 2.5x J1's cost.
+- J3's one strength holds on test: when both retrievers are wrong it
+  finds the gold at rank 1 for 12.7% of questions vs 7.7% for J1 and DAT,
+  because it pushes alpha to extremes less. Fixed 0.6 (19.9%) is still
+  best there. This points to a possible future design: use top-1 to set
+  alpha, and fall back toward a fixed blend when both top-1s look weak.
+  (Not tested; noted as future work.)
+- **Step 2.8 (control)** needs no extra run: option C with only the top-1
+  paragraph is exactly J1 (unit-tested), so the whole J3-J1 gap is caused
+  by adding paragraphs #2 and #3, not by the formula.
+
 ---
 
 ## 6. Decisions log
@@ -436,6 +487,8 @@ limitation to state and possible future work.
 | 2.6 | Re-read caches from disk after every Jev run | 6 replies were lost on disk (likely OneDrive sync) |
 | 2.7.1 | J3 options A, B, C and the selection rule, fixed before the run | Few candidates, chosen on tune only, to avoid overfitting |
 | 2.7.1 | J3 option C chosen; no extra weightings tried afterwards | Pre-declared rule; post-hoc tuning would bias the result |
+| 2.7.2 | Run J3 on test despite the negative tune result | Pre-registered evaluation; a test-set negative result is stronger evidence |
+| 2.8 | No separate control run | Option C with k=1 is exactly J1, so J1 already is the control |
 
 ---
 
@@ -453,6 +506,8 @@ limitation to state and possible future work.
 | `e1bf59a` | extension/jev | Step 2.6: J1 vs DAT on test, disk check after runs |
 | `8a41832` | extension/jev | This progress log (through 2.6) |
 | `13e2c25` | extension/jev | Step 2.7.1: J3 options, tune choice (C) |
+| `f5875de` | extension/jev | This progress log (through 2.7.1) |
+| `a83a773` | extension/jev | Step 2.7.2: J3 on test, group breakdown |
 
 `extension/jev` starts from `baseline/setup` (the baseline PR is not
 merged yet) and is not pushed yet. **66 unit tests** pass (`pytest`).
@@ -475,9 +530,10 @@ From `results/budget_ledger.csv` (every paid batch, billed cost):
 | Jev J1 (pilot + tune) | 2,865 | $0.1332 |
 | Jev J1 test (incl. 6 re-judged) | 3,002 | $0.1410 |
 | Jev J3 tune (incl. 8 re-judged) | 2,873 | $0.3349 |
-| **Total** | | **$0.974 of $20** |
+| Jev J3 test | 2,996 | $0.3530 |
+| **Total** | | **$1.327 of $20** |
 
-Remaining planned spend: J3 test ~$0.35, latency measurement small. Optional: GPT-4o-mini top-3 control (~$0.70), DAT with
+Remaining planned spend: latency measurement (Step 2.10), small. Optional: GPT-4o-mini top-3 control (~$0.70), DAT with
 GPT-4o (~$5.30), DRCD (~$0.40).
 
 ---
@@ -491,7 +547,8 @@ GPT-4o (~$5.30), DRCD (~$0.40).
 
 ## 10. Next step
 
-**Step 2.7.2 (awaiting approval):** run J3 with option C on the 2,996 test
-questions (~$0.35, ~20 min) and compare with J1, DAT and fixed 0.6 using
-paired bootstrap tests, to report RQ2 on test as pre-registered, even
-though the tune result suggests J3 will be below J1.
+**Step 2.9 (RRF baseline, free):** add reciprocal rank fusion
+(`sum of 1 / (60 + rank)` over both retrievers), a strong zero-judge
+baseline that does not depend on score normalization, and compare it with
+fixed 0.6, DAT, J1 and J3 on the test set. Answers part of RQ3 (are the
+judges worth their cost against zero-call baselines?).
