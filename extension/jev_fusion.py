@@ -16,7 +16,8 @@ margin also fixed before looking: NONINFERIORITY_MARGIN.
 
     python -m extension.jev_fusion --set tune --compare-mappings   # step 2.5
     python -m extension.jev_fusion --set test                      # step 2.6
-    python -m extension.jev_fusion --set tune --compare-j3         # step 2.7
+    python -m extension.jev_fusion --set tune --compare-j3         # step 2.7.1
+    python -m extension.jev_fusion --set test --j3                 # step 2.7.2
 """
 
 import argparse
@@ -237,6 +238,28 @@ def judge_agreement(dat_rows, jev_alpha):
     print(f"    right direction for Jev only: {only_jev}, for DAT only: {only_dat}")
 
 
+def group_breakdown(set_name, methods):
+    """P@1 per method on four groups defined by the two retrievers' top-1:
+    same paragraph, only dense right, only BM25 right, different and both wrong."""
+    norm_dense, norm_bm25, gold_index = load_normalized(set_name)
+    rows = topk_candidates(set_name, 1)
+    top = [{p["slot"]: p["id"] for p in row["passages"]} for row in rows]
+    dense_ok = np.array([t["dense_1"] == row["gold"] for t, row in zip(top, rows)])
+    bm25_ok = np.array([t["bm25_1"] == row["gold"] for t, row in zip(top, rows)])
+    same = np.array([t["dense_1"] == t["bm25_1"] for t in top])
+    groups = {
+        "same paragraph": same,
+        "only dense right": dense_ok & ~bm25_ok,
+        "only BM25 right": bm25_ok & ~dense_ok,
+        "different, both wrong": ~same & ~dense_ok & ~bm25_ok,
+    }
+    hits = {name: gold_ranks(fuse(norm_dense, norm_bm25, alpha), gold_index) == 1 for name, alpha in methods.items()}
+    print(f"\n== P@1 by question group ({set_name}) ==")
+    print(f"  {'group':<24} {'n':>5} " + " ".join(f"{name[:16]:>16}" for name in methods))
+    for group, mask in groups.items():
+        print(f"  {group:<24} {int(mask.sum()):>5} " + " ".join(f"{hits[name][mask].mean():>16.4f}" for name in methods))
+
+
 def write_csv(rows, path):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
@@ -252,7 +275,26 @@ def main():
     parser.add_argument("--set", choices=["test", "tune"], required=True)
     parser.add_argument("--compare-mappings", action="store_true", help="step 2.5: choose the mapping on tune")
     parser.add_argument("--compare-j3", action="store_true", help="step 2.7: choose the J3 alpha option on tune")
+    parser.add_argument("--j3", action="store_true", help="step 2.7.2: J3 (chosen option) vs J1, DAT, fixed")
     args = parser.parse_args()
+
+    if args.j3:
+        a1 = j1_alphas(load_judgments(args.set, 1), CHOSEN_MAPPING)
+        a3 = multi_alphas(load_judgments(args.set, 3), CHOSEN_J3_OPTION)
+        methods = {"Fixed hybrid (alpha=0.6)": 0.6}
+        if args.set == "test":  # DAT was judged on test only
+            methods["DAT (GPT-4o-mini)"] = np.array([row["alpha"] for row in dat_alphas(args.set)])
+        methods[f"Jev J1 ({CHOSEN_MAPPING})"] = a1
+        methods[f"Jev J3 ({CHOSEN_J3_OPTION})"] = a3
+        rows = evaluate_alphas(args.set, methods)
+        print_rows(rows, f"SQuAD {args.set}, {len(a3)} questions")
+        write_csv(rows, ROOT / "results" / f"jev_j3_{args.set}.csv")
+        print_comparison("Jev J3", "Jev J1", compare_pair(args.set, a3, a1))
+        if "DAT (GPT-4o-mini)" in methods:
+            print_comparison("Jev J3", "DAT (GPT-4o-mini)", compare_pair(args.set, a3, methods["DAT (GPT-4o-mini)"]))
+        print_comparison("Jev J3", "Fixed 0.6", compare_pair(args.set, a3, 0.6))
+        group_breakdown(args.set, methods)
+        return
 
     if args.compare_j3:
         j3 = load_judgments(args.set, 3)
