@@ -1,6 +1,25 @@
 import pytest
 
-from extension.jev_fusion import choose_mapping, j1_alphas, to_dat_score
+from extension.jev_fusion import choose_mapping, j1_alphas, right_direction, to_dat_score, verdict
+
+
+@pytest.mark.parametrize(
+    "ci, expected",
+    [
+        ((0.010, 0.002, 0.018), "better"),
+        ((0.000, -0.008, 0.008), "matches"),
+        ((-0.004, -0.008, -0.001), "significantly lower"),
+        ((-0.020, -0.030, -0.011), "worse"),
+        ((-0.005, -0.015, 0.004), "inconclusive"),
+    ],
+)
+def test_verdict_against_one_point_margin(ci, expected):
+    assert expected in verdict(ci, margin=0.01)
+
+
+def test_right_direction():
+    assert right_direction(0.8, dense_correct=True) and right_direction(0.2, dense_correct=False)
+    assert not right_direction(0.5, dense_correct=True) and not right_direction(0.5, dense_correct=False)
 
 
 def judgment(score, top_level):

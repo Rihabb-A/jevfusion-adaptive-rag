@@ -258,7 +258,14 @@ def judge_set(set_name, k=1, limit=None, sample_seed=0, workers=8):
     print(f"Judged {calls} new questions in {(time.perf_counter() - started) / 60:.1f} min: "
           f"{tokens} input tokens, ${cost:.6f}, {invalid} invalid replies, "
           f"{http_errors} HTTP errors (not cached, re-run to retry)")
-    return [(row, cache.get(key)) for row, _, key in jobs]
+    # Re-read the cache from disk: appended lines can be lost (e.g. a sync
+    # client replacing the file mid-run), and the in-memory copy would hide it.
+    on_disk = JudgeCache(cache.path)
+    lost = sum(on_disk.get(key) is None for _, _, key in jobs if cache.get(key) is not None)
+    if lost:
+        print(f"WARNING: {lost} replies are missing from {cache.path.name} on disk; re-run this command "
+              f"to judge them again (only the missing ones are sent)")
+    return [(row, on_disk.get(key)) for row, _, key in jobs]
 
 
 def print_pilot(results):
