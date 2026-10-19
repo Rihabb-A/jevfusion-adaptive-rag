@@ -72,8 +72,8 @@ paragraphs per retriever instead of top-1.
 | 4 | N3 | BM25 + dense retrieval on NFCorpus, sanity check vs BEIR | done: dense 0.4220 vs BM25 0.3067 nDCG@10; BM25 gap = stemming | $0.160 |
 | 4 | N4 | Zero-judge baselines (BM25, dense, RRF, fixed 0.6, dev-tuned alpha) | done: dev alpha 0.8 = dense; 0.6 hurts; RRF weakest | free |
 | 4 | N5 | Judge pipeline for named datasets + SQuAD regression check | done: 10/10 SQuAD result files byte-identical | free |
-| 4 | N6 | DAT (GPT-4o-mini) on NFCorpus | **in progress** | ~$0.07 |
-| 4 | N7 | Jev J1 on NFCorpus | to do | ~$0.03 |
+| 4 | N6 | DAT (GPT-4o-mini) on NFCorpus | done: **DAT below dev-tuned fixed alpha** (-1.32 nDCG) | $0.054 |
+| 4 | N7 | Jev J1 on NFCorpus | **in progress** | ~$0.03 |
 | 4 | N8 | Jev J3 on NFCorpus | to do | ~$0.07 |
 | 4 | N9 | Full analysis | to do | free |
 | 4 | N10 | Fair latency | to do | ~$0.05 |
@@ -1527,3 +1527,130 @@ dense.
 
 **Next:** N6, DAT with GPT-4o-mini: a 20-query dev pilot, then the full
 test set (323 queries).
+
+**Git (N5):** commit `47e467b` on `extension/nfcorpus` (not pushed).
+
+### N6 DAT (GPT-4o-mini) on NFCorpus (done)
+
+**Objective:** test whether the reproduced DAT method still improves on
+the zero-judge baselines on a second, very different dataset, using the
+identical judge (GPT-4o-mini via OpenRouter pinned to OpenAI, temperature
+0, seed 42, max 10 tokens, the Appendix A prompt) and alpha rule (Eq. 6).
+These are the same candidates Jev judges in N7.
+
+**Commands:**
+
+```
+python -m extension.nfcorpus_judges dat --set nfcorpus-dev --limit 20   # pilot
+python -m extension.nfcorpus_judges dat --set nfcorpus-test             # full test
+python -m extension.nfcorpus_analysis dat                               # analysis
+```
+
+**Pilot (20 dev queries, seed 0):** 20/20 replies parsed, all served by
+OpenAI with the pinned settings, mean 1,063 prompt tokens (max 2,138),
+$0.00016 per call, all on disk. **Full test run:** 323/323 replies, 0 HTTP
+errors, 0 unparseable, all verified on disk; 337,074 input tokens, 1.5
+min with 8 parallel requests. **Cost:** pilot $0.0032 + test $0.0511 =
+**$0.0544**. NFCorpus total $0.2145; **project total $1.5980 of $20**.
+Per-query judge scores and alphas: `results/nfcorpus/dat_alphas_test.csv`.
+
+**Results (test, 323 queries):**
+
+| Method | nDCG@10 | Recall@10 | MRR@10 | P@1 |
+|---|---:|---:|---:|---:|
+| Dense only | 0.4220 | 0.2108 | 0.6253 | 0.5418 |
+| Fixed 0.8 (dev-tuned) | 0.4252 | 0.2110 | 0.6424 | 0.5604 |
+| Fixed 0.6 (SQuAD) | 0.4035 | 0.2039 | 0.6196 | 0.5325 |
+| **DAT (GPT-4o-mini)** | **0.4120** | 0.2042 | 0.6308 | 0.5480 |
+
+| DAT minus | nDCG@10 [95% CI] | Recall@10 | MRR@10 | P@1 |
+|---|---|---|---|---|
+| Dense only | -0.0100 [-0.0218, +0.0021] | -0.0067 [-0.0137, +0.0003] | +0.0055 [-0.0181, +0.0288] | +0.0062 [-0.0279, +0.0402] |
+| **Fixed 0.8 (dev)** | **-0.0132 [-0.0214, -0.0056]** | -0.0068 [-0.0120, -0.0021] | -0.0116 [-0.0264, +0.0027] | -0.0124 [-0.0372, +0.0124] |
+| Fixed 0.6 (SQuAD) | +0.0085 [-0.0002, +0.0173] | +0.0002 [-0.0042, +0.0043] | +0.0111 [-0.0041, +0.0276] | +0.0155 [-0.0093, +0.0402] |
+| RRF | +0.0422 [+0.0282, +0.0572] | +0.0255 [+0.0151, +0.0375] | +0.0290 [+0.0036, +0.0557] | +0.0217 [-0.0155, +0.0588] |
+| BM25 only | +0.1054 [+0.0861, +0.1257] | +0.0520 [+0.0373, +0.0690] | +0.1210 [+0.0886, +0.1545] | +0.1207 [+0.0805, +0.1641] |
+
+**What happened.** DAT is **significantly worse than the dev-tuned fixed
+alpha 0.8** (-1.32 nDCG@10 points) and not distinguishable from dense
+alone (-1.00, CI spans 0). Its gain over the transferred SQuAD alpha 0.6
+(+0.85) is borderline (CI touches 0). It clearly beats RRF and BM25. Per
+query vs fixed 0.8: better on 52, worse on 94, unchanged on 177. **The
+SQuAD finding "DAT beats fixed alpha" does not hold on NFCorpus.**
+
+**Alpha distribution:** 0.5 for 35.0% of queries, 1.0 for 22.3%, 0.0 for
+3.1%, mean 0.622 (best fixed weight on dev: 0.8). Most common score pairs
+(dense, BM25): 5/5 (82), 4/1 (35), 4/2 (22), 1/4 (19), 1/0 (17), 4/4 (17).
+
+**nDCG@10 by top-1 relevance group** (relevant = official grade >= 1):
+
+| Group | n | DAT | Dense only | Fixed 0.8 (dev) | Fixed 0.6 (SQuAD) |
+|---|---:|---:|---:|---:|---:|
+| Same document from both retrievers | 87 | 0.4734 | 0.4905 | 0.4911 | 0.4783 |
+| Different, both relevant (new on NFCorpus) | 53 | 0.7577 | 0.7791 | 0.7826 | 0.7626 |
+| Only dense top-1 relevant | 60 | 0.5265 | **0.5839** | 0.5466 | 0.4664 |
+| Only BM25 top-1 relevant | 23 | **0.4843** | 0.3120 | 0.4579 | 0.4914 |
+| Different, neither relevant | 100 | 0.0901 | 0.1013 | 0.0981 | 0.0901 |
+
+**Direction of alpha** (83 queries where exactly one top-1 is relevant):
+toward the relevant retriever 79.5%, neutral 6.0%, wrong way **14.5%**
+(SQuAD: 88.2% / 3.4% / 8.4%). When only dense is right: right 88.3%, mean
+alpha 0.797. When only BM25 is right: right only **56.5%**, mean alpha 0.461.
+
+**Rubric alignment** (DAT's 0-5 score vs the official grade of the 646
+judged top-1 documents): Spearman **+0.433**.
+
+| Official grade | n | Mean DAT score | Scored >= 4 | Scored <= 1 |
+|---|---:|---:|---:|---:|
+| 0 (not judged relevant) | 333 | 2.44 | 38% | 41% |
+| 1 (partially relevant) | 216 | 4.09 | 81% | 7% |
+| 2 (highly relevant) | 97 | 4.02 | 75% | 5% |
+
+**Why might it have happened (supported by the data above):**
+1. **Alpha 0.5 is a costly default on NFCorpus.** DAT returns 0.5 whenever
+   both top-1 documents get equal scores (35% of queries). On SQuAD 0.5 was
+   close to the best fixed weight (0.6); here the best is 0.8, so every
+   neutral decision gives BM25 more weight than is good on average.
+2. **Rank 1 is not all that matters.** On SQuAD, when both retrievers
+   returned the same paragraph, no alpha could change P@1. NFCorpus's
+   nDCG@10 also scores ranks 2-10, so alpha still matters for the 87
+   same-document queries, and DAT's 0.5 there (vs 0.8) costs about 1.8
+   points on that group (0.4734 vs 0.4911).
+3. **The rubric does not separate grade 1 from grade 2** (mean scores 4.09
+   vs 4.02) and rates 38% of grade-0 documents at 4 or 5. Some of those may
+   be relevant documents missing from NFCorpus's incomplete labels, so this
+   is partly a label problem, not only a judge problem (cannot be told
+   apart here). Either way, the judge's view of "relevant" and the labels'
+   view only partly agree (rho 0.43), so judge-chosen weights are tuned to
+   a different target than the metric.
+4. **Where DAT does help:** when only BM25's top-1 is relevant (23
+   queries) it beats dense by 17 points (0.4843 vs 0.3120). The set is
+   small, and the gain is outweighed by losses where dense is right.
+5. **Zero-match BM25 queries are handled well:** on the 25 queries where
+   BM25 matches nothing, DAT gave BM25's arbitrary top-1 a mean score of
+   0.08 and alpha = 1.0 for 56% (mean 0.804).
+
+**Examples.** Gain vs fixed 0.8: "hormonal dysfunction" (alpha 0.3, 0.258
+vs 0.000), "The Actual Benefit of Diet vs. Drugs" (BM25's top-1 is grade
+2; alpha 0.4; 0.658 vs 0.435). Loss: "blood clots": both top-1 documents
+are relevant (grade 1) but DAT chose alpha 0.0 and the ranking collapsed
+to BM25's (0.220 vs 0.855); "oral intraepithelial neoplasia" (alpha 0.2,
+neither top-1 relevant; 0.269 vs 0.554).
+
+**What it means (RQ3, and the context for RQ1):** on NFCorpus, an LLM
+judge with DAT's rule is not worth its cost compared with a fixed alpha
+tuned on dev, and not better than dense alone. This is a negative result
+for DAT's generality. For RQ1 the question becomes whether Jev can do
+better than DAT here.
+
+**Cannot conclude:** that DAT is worse than dense (not significant), or
+whether the low rubric alignment is due to the judge or to incomplete
+labels.
+
+**Problems:** one new analysis test had a wrong expectation (a Spearman
+correlation with tied grades is 0.9487, not 1); the code was right, the
+test now checks both the tied and the untied case. **Tests:** 104 passed
+(102 + 2). **Limitations:** 23 queries in the only-BM25-relevant group;
+group sizes limit fine-grained conclusions.
+
+**Next:** N7, Jev J1 on the same candidates (pilot on dev, then test).

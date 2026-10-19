@@ -222,16 +222,191 @@ def baseline_analysis():
         print(f"  {name:<32} nDCG@10 on those {per[name]['ndcg@10'][zero].mean():.4f}, on the rest {per[name]['ndcg@10'][~zero].mean():.4f}")
 
 
+DEV_TUNED_ALPHA = 0.8  # N4, chosen on nfcorpus-dev
+TEST = "nfcorpus-test"
+
+
+def per_query_for_alpha(set_name, alpha):
+    from baseline.dat_fusion import fuse, minmax
+    docs, qs, qrels = load_split(set_name)
+    bm25, dense = load_scores(set_name)
+    return per_query_metrics(fuse(minmax(dense), minmax(bm25), alpha), [q["id"] for q in qs], [d["id"] for d in docs], qrels)
+
+
+def zero_judge_per_query(set_name=TEST):
+    from extension.nfcorpus import evaluate, method_scores
+    return evaluate(set_name, method_scores(set_name, {"Fixed 0.6 (SQuAD)": 0.6, "Fixed 0.8 (dev)": DEV_TUNED_ALPHA}))
+
+
+def top1_groups(set_name=TEST):
+    """Groups by the official relevance of each retriever's top-1 document
+    (relevant = grade >= 1). NFCorpus adds 'different, both relevant'."""
+    from extension.nfcorpus_judges import dat_candidates
+    _, qs, qrels = load_split(set_name)
+    rows = dat_candidates(set_name)
+    d_grade = np.array([qrels[r["query_id"]].get(r["dense_top1"], 0) for r in rows])
+    b_grade = np.array([qrels[r["query_id"]].get(r["bm25_top1"], 0) for r in rows])
+    same = np.array([r["same_top1"] for r in rows])
+    groups = {
+        "same document": same,
+        "different, both relevant": ~same & (d_grade >= 1) & (b_grade >= 1),
+        "only dense top-1 relevant": ~same & (d_grade >= 1) & (b_grade == 0),
+        "only BM25 top-1 relevant": ~same & (b_grade >= 1) & (d_grade == 0),
+        "different, neither relevant": ~same & (d_grade == 0) & (b_grade == 0),
+    }
+    return groups, d_grade, b_grade, rows
+
+
+def direction(alphas, groups):
+    """On queries where exactly one top-1 is relevant: share of alphas that
+    lean toward that retriever, stay at 0.5, or lean the wrong way."""
+    out = {}
+    for label, toward_dense in (("only dense top-1 relevant", True), ("only BM25 top-1 relevant", False)):
+        a = alphas[groups[label]]
+        right = (a > 0.5) if toward_dense else (a < 0.5)
+        out[label] = (int(groups[label].sum()), float(np.mean(right)), float(np.mean(np.isclose(a, 0.5))), float(a.mean()))
+    both = groups["only dense top-1 relevant"] | groups["only BM25 top-1 relevant"]
+    want_dense = groups["only dense top-1 relevant"][both]
+    a = alphas[both]
+    right = np.where(want_dense, a > 0.5, a < 0.5)
+    neutral = np.isclose(a, 0.5)
+    out["all one-relevant"] = (int(both.sum()), float(right.mean()), float(neutral.mean()), float((~right & ~neutral).mean()))
+    return out
+
+
+def rubric_alignment(pairs, label):
+    """`pairs`: (judge score on its 0-5 scale, official grade) for judged
+    documents. Mean judge score per grade and a Spearman correlation."""
+    scores = np.array([p[0] for p in pairs], dtype=float)
+    grades = np.array([p[1] for p in pairs])
+
+    def rank(x):
+        order = np.argsort(x, kind="stable")
+        r = np.empty(len(x))
+        r[order] = np.arange(len(x))
+        for v in np.unique(x):  # average ranks for ties
+            r[x == v] = r[x == v].mean()
+        return r
+
+    rho = float(np.corrcoef(rank(scores), rank(grades.astype(float)))[0, 1])
+    print(f"  {label}: Spearman(judge score, official grade) = {rho:+.3f} over {len(pairs)} judged documents")
+    for g in (0, 1, 2):
+        s = scores[grades == g]
+        if len(s):
+            print(f"    grade {g}: n={len(s):>4}  mean judge score {s.mean():.2f}  share scored >= 4: {np.mean(s >= 4):.0%}  "
+                  f"share scored <= 1: {np.mean(s <= 1):.0%}")
+    return rho
+
+
+def judge_quality(name, alphas, per_zero, extra=None):
+    """Main table rows and paired comparisons for one judge on test."""
+    per = per_query_for_alpha(TEST, alphas)
+    m = summarize(per)
+    print(f"\n== {name} on {TEST} ==")
+    print(f"  nDCG@10 {m['ndcg@10']:.4f}  R@10 {m['recall@10']:.4f}  MRR@10 {m['mrr@10']:.4f}  P@1 {m['p@1']:.4f}")
+    refs = {"Dense only": per_zero["Dense only"], "Fixed 0.8 (dev)": per_zero["Fixed 0.8 (dev)"],
+            "Fixed 0.6 (SQuAD)": per_zero["Fixed 0.6 (SQuAD)"], "RRF (k=60)": per_zero["RRF (k=60)"],
+            "BM25 only": per_zero["BM25 only"], **(extra or {})}
+    print("  Paired differences (95% CI, 10,000 resamples):")
+    for ref, per_ref in refs.items():
+        print_paired(f"{name} - {ref}", per, per_ref)
+    return per
+
+
+def alpha_report(alphas, scores=None):
+    c = Counter(np.round(alphas, 1))
+    print("  alpha distribution: " + "  ".join(f"{a:.1f}: {c.get(a, 0) / len(alphas):.1%}" for a in ALPHA_GRID if c.get(a, 0))
+          + f"   mean {alphas.mean():.3f}")
+    if scores is not None:
+        print("  most common score pairs (dense, BM25): " + ", ".join(f"{p[0]} {p[1]}: {n}" for p, n in Counter(scores).most_common(6)))
+
+
+ALPHA_GRID = [round(x / 10, 1) for x in range(11)]
+
+
+def dat_analysis():
+    """N6: DAT (GPT-4o-mini) on NFCorpus test."""
+    from extension.nfcorpus_judges import dat_alphas_nf
+    alphas, scores = dat_alphas_nf(TEST)
+    per_zero = zero_judge_per_query()
+    per = judge_quality("DAT (GPT-4o-mini)", alphas, per_zero)
+    alpha_report(alphas, scores)
+    groups, d_grade, b_grade, rows = top1_groups()
+    print_groups({"DAT": per, "Dense only": per_zero["Dense only"], "Fixed 0.8 (dev)": per_zero["Fixed 0.8 (dev)"],
+                  "Fixed 0.6 (SQuAD)": per_zero["Fixed 0.6 (SQuAD)"]}, groups)
+    print_direction({"DAT": alphas}, groups)
+    print("\n== Rubric alignment: DAT score vs official grade of the judged top-1 documents ==")
+    pairs = [(s[0], g) for s, g in zip(scores, d_grade)] + [(s[1], g) for s, g in zip(scores, b_grade)]
+    rubric_alignment(pairs, "DAT")
+    zero_bm25(alphas, [s[1] for s in scores], "DAT BM25 score")
+    write_alpha_file("dat", rows, alphas, scores, d_grade, b_grade)
+    examples(per, per_zero["Fixed 0.8 (dev)"], alphas, rows, "DAT", "fixed 0.8")
+    return alphas, per
+
+
+def print_groups(per_by_method, groups):
+    print("\n== nDCG@10 by top-1 relevance group (test) ==")
+    print(f"  {'group':<30} {'n':>4} " + " ".join(f"{m[:17]:>17}" for m in per_by_method))
+    for label, mask in groups.items():
+        print(f"  {label:<30} {int(mask.sum()):>4} " +
+              " ".join(f"{per_by_method[m]['ndcg@10'][mask].mean() if mask.any() else float('nan'):>17.4f}" for m in per_by_method))
+
+
+def print_direction(alphas_by_judge, groups):
+    print("\n== Direction of alpha when exactly one top-1 is relevant ==")
+    for judge, alphas in alphas_by_judge.items():
+        d = direction(alphas, groups)
+        n, right, neutral, wrong = d["all one-relevant"]
+        print(f"  {judge:<10} n={n}: toward the relevant retriever {right:.1%}, neutral {neutral:.1%}, wrong way {wrong:.1%}")
+        for label in ("only dense top-1 relevant", "only BM25 top-1 relevant"):
+            n, r, neu, mean_a = d[label]
+            print(f"     {label:<28} n={n:>3}  right {r:.1%}  neutral {neu:.1%}  mean alpha {mean_a:.3f}")
+
+
+def zero_bm25(alphas, bm25_scores, label):
+    bm25, _ = load_scores(TEST)
+    zero = (bm25 > 0).sum(axis=1) == 0
+    s = np.array(bm25_scores, dtype=float)[zero]
+    a = alphas[zero]
+    print(f"\n== The {int(zero.sum())} test queries where BM25 matches nothing (BM25 top-1 = arbitrary first document) ==")
+    print(f"  {label}: mean {s.mean():.2f}; alpha = 1.0 for {np.mean(np.isclose(a, 1.0)):.0%}, mean alpha {a.mean():.3f}")
+
+
+def write_alpha_file(tag, rows, alphas, scores, d_grade, b_grade):
+    out = []
+    for r, a, s, dg, bg in zip(rows, alphas, scores, d_grade, b_grade):
+        out.append({"query_id": r["query_id"], "dense_top1": r["dense_top1"], "bm25_top1": r["bm25_top1"],
+                    "same_top1": r["same_top1"], "dense_score": s[0], "bm25_score": s[1], "alpha": float(a),
+                    "dense_top1_grade": int(dg), "bm25_top1_grade": int(bg)})
+    write_rows(out, RESULTS / f"{tag}_alphas_test.csv")
+
+
+def examples(per, per_ref, alphas, rows, name, ref_name, n=2):
+    diff = per["ndcg@10"] - per_ref["ndcg@10"]
+    docs, qs, qrels = load_split(TEST)
+    title = {d["id"]: d["title"] for d in docs}
+    for label, idx in (("largest gain", np.argsort(-diff)[:n]), ("largest loss", np.argsort(diff)[:n])):
+        for i in idx:
+            r = rows[i]
+            print(f"  {name} {label} vs {ref_name}: {r['query_id']} {r['question']!r} nDCG@10 {per['ndcg@10'][i]:.3f} "
+                  f"vs {per_ref['ndcg@10'][i]:.3f}, alpha {alphas[i]:.2f}")
+            print(f"     dense top-1 (grade {qrels[r['query_id']].get(r['dense_top1'], 0)}): {title[r['dense_top1']][:80]}")
+            print(f"     BM25  top-1 (grade {qrels[r['query_id']].get(r['bm25_top1'], 0)}): {title[r['bm25_top1']][:80]}")
+    print(f"  {name} vs {ref_name} per query: better {np.sum(diff > 1e-12)}, worse {np.sum(diff < -1e-12)}, same {np.sum(np.abs(diff) <= 1e-12)}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="NFCorpus analyses")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("retrieval")
-    sub.add_parser("baselines")
+    for name in ("retrieval", "baselines", "dat"):
+        sub.add_parser(name)
     args = parser.parse_args()
     if args.command == "retrieval":
         retrieval()
     elif args.command == "baselines":
         baseline_analysis()
+    elif args.command == "dat":
+        dat_analysis()
 
 
 if __name__ == "__main__":
