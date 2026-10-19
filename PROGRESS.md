@@ -4,10 +4,10 @@ A detailed, cumulative record of everything done in this project: what we
 did, how, why, what it cost and what came out. Updated after every
 completed step until the project ends.
 
-**Last updated:** 20 October 2026, after Step 2.11 (`extension/README.md`
-written and verified). **The SQuAD work (Phases 1 and 2) is complete;**
-pushing and the PRs await approval. A BEIR NFCorpus phase is requested
-and will be planned after the team reviews the SQuAD work.
+**Last updated:** 20 October 2026, after the baseline PR (#1) was merged
+into `main`. **The SQuAD work (Phases 1 and 2) is complete;** pushing
+`extension/jev` and its PR await approval. A BEIR NFCorpus phase is
+requested and will be planned after the team reviews the SQuAD work.
 
 **Every result table and analysis in one place:** [§11 Consolidated
 results](#11-consolidated-results-every-table-and-analysis).
@@ -51,7 +51,7 @@ paragraphs per retriever instead of top-1.
 | 1 | 1.3 | Free baselines and alpha grid search, checkpoint vs paper | done | free |
 | 1 | 1.4.1-1.4.7 | DAT judge (GPT-4o-mini): code, host pin, pilot, full run, alphas | done | $0.331 |
 | 1 | 1.5 | DAT evaluation vs paper, significance test | done | free |
-| 1 | 1.6 | `baseline/README.md`, commits, push | done; **PR awaiting team review** | free |
+| 1 | 1.6 | `baseline/README.md`, commits, push, PR | done; **PR #1 merged into `main`** (merge commit `f5da052`) | free |
 | 2 | 2.1 | Branch, Issue 3 text, design decisions | done; **Issue 3 to open on GitHub** | free |
 | 2 | 2.2 | Jev price and budget estimate; pin `jev-1.13.0` | done | free |
 | 2 | 2.3 | Jev judge code (J1/J3) with offline tests | done | free |
@@ -696,8 +696,12 @@ conversation for the team to post.
 | `d6595d9` | extension/jev | This progress log (through 2.10, §11 consolidated results) |
 | `981583d` | extension/jev | Step 2.11: `extension/README.md`; PROGRESS fixes |
 
-`extension/jev` starts from `baseline/setup` (the baseline PR is not
-merged yet) and is not pushed yet. **72 unit tests** pass (`pytest`).
+| `f5da052` | main | Merge pull request #1 from `baseline/setup` (merge commit, not squash) |
+
+`extension/jev` starts from `baseline/setup`. Since PR #1 was merged with
+a merge commit, `origin/main...extension/jev` contains only the 16
+extension commits (23 files), so the extension PR needs no rebase.
+`extension/jev` is not pushed yet. **72 unit tests** pass (`pytest`).
 
 Local only (gitignored): `.env`, `.venv/`, `data/` (SQuAD, score matrices,
 embedding cache, judge caches). Not committed by choice: the paper PDF and
@@ -729,8 +733,10 @@ with GPT-4o (~$5.30), GPT-4o-mini top-3 control (~$0.70), DRCD (~$0.40).
 ## 9. Open items for the team
 
 - Review the SQuAD work: `baseline/README.md`, `extension/README.md`, §11.
-- Open the PR `baseline/setup -> main`, get a teammate review, merge;
-  close Issue 2 (all acceptance criteria met).
+- ~~Open the PR `baseline/setup -> main`, review, merge~~ done (PR #1,
+  20 Oct 2026). Make sure the baseline issue is closed with its
+  acceptance criteria ticked (GitHub numbers issues and PRs together,
+  so check the issue's real number before writing "Closes #N").
 - Approve pushing `extension/jev`; open Issue 3 and the extension PR with
   the drafted texts; teammate review; merge; close Issue 3.
 - Phase 3: `report/REPORT.md`, slides (max 8), defense rehearsal.
@@ -738,8 +744,9 @@ with GPT-4o (~$5.30), GPT-4o-mini top-3 control (~$0.70), DRCD (~$0.40).
 
 ## 10. Next step
 
-**Waiting for approval to push** `extension/jev` (after the baseline PR
-is merged, so the extension PR shows only extension work).
+**Waiting for approval to push** `extension/jev`. The baseline PR is
+merged, so the extension PR (`extension/jev -> main`) will show only the
+16 extension commits.
 
 **After the SQuAD review:** the BEIR NFCorpus phase starts with a plan
 only (no downloads, code or API calls): proposed small steps, what is
