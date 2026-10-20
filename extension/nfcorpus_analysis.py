@@ -526,10 +526,93 @@ def j3_analysis():
     return j3_alpha, per
 
 
+def mean_cost(path):
+    import json
+    with path.open(encoding="utf-8") as handle:
+        return float(np.mean([json.loads(line)["cost_usd"] for line in handle]))
+
+
+def final_analysis():
+    """N9: consolidated NFCorpus results, recomputed from saved outputs."""
+    import os
+    from dotenv import load_dotenv
+    from baseline.dat_judge import cache_path as dat_cache_path
+    from extension.jev_judge import cache_path as jev_cache_path
+    from extension.nfcorpus_judges import dat_alphas_nf, dat_candidates, jev_alphas_nf, jev_candidates
+    load_dotenv(ROOT / ".env")
+
+    # 1. Integrity: complete caches, exact query ids.
+    _, qs, qrels = load_split(TEST)
+    ids = [q["id"] for q in qs]
+    assert ids == sorted(qrels) and len(ids) == 323, "test queries do not match the official labels"
+    assert [r["query_id"] for r in dat_candidates(TEST)] == ids
+    for k in (1, 3):
+        assert [r["query_id"] for r in jev_candidates(TEST, k)] == ids
+    dat_alpha, _ = dat_alphas_nf(TEST)          # raises if any reply is missing or unparseable
+    j1_alpha, _ = jev_alphas_nf(TEST, 1)         # raises if any reply is missing or invalid
+    j3_alpha, _ = jev_alphas_nf(TEST, 3)
+    print("Integrity: 323/323 test queries = official test labels; DAT, J1 and J3 replies complete and valid.")
+
+    # 2. Consolidated table.
+    per_zero = zero_judge_per_query()
+    per = {"BM25 only": per_zero["BM25 only"], "Dense only": per_zero["Dense only"], "RRF (k=60)": per_zero["RRF (k=60)"],
+           "Fixed alpha 0.6 (SQuAD)": per_zero["Fixed 0.6 (SQuAD)"], "Fixed alpha 0.8 (dev-tuned)": per_zero["Fixed 0.8 (dev)"],
+           "DAT (GPT-4o-mini)": per_query_for_alpha(TEST, dat_alpha), "Jev J1": per_query_for_alpha(TEST, j1_alpha),
+           "Jev J3": per_query_for_alpha(TEST, j3_alpha)}
+    dat_model, jev_model = os.getenv("DAT_JUDGE_MODEL", "openai/gpt-4o-mini"), os.getenv("JEV_MODEL", "jev-1.13.0")
+    cost = {"DAT (GPT-4o-mini)": mean_cost(dat_cache_path(dat_model, TEST)),
+            "Jev J1": mean_cost(jev_cache_path(jev_model, TEST, 1)), "Jev J3": mean_cost(jev_cache_path(jev_model, TEST, 3))}
+    rows = []
+    print(f"\n== NFCorpus test, 323 queries ==\n  {'method':<30} {'nDCG@10':>8} {'R@10':>7} {'MRR@10':>7} {'P@1':>7} {'$/1k q':>8}")
+    for name, p in per.items():
+        m = summarize(p)
+        rows.append({"method": name, **m, "judge_usd_per_1000_queries": 1000 * cost.get(name, 0.0)})
+        print(f"  {name:<30} {m['ndcg@10']:>8.4f} {m['recall@10']:>7.4f} {m['mrr@10']:>7.4f} {m['p@1']:>7.4f} {1000 * cost.get(name, 0.0):>8.4f}")
+    write_rows(rows, RESULTS / "final_comparison.csv")
+
+    # 3. Paired comparisons and power.
+    pairs = [("Jev J1", "DAT (GPT-4o-mini)"), ("Jev J1", "Jev J3"), ("Jev J3", "DAT (GPT-4o-mini)"),
+             ("Jev J1", "Fixed alpha 0.6 (SQuAD)"), ("Jev J1", "Fixed alpha 0.8 (dev-tuned)"), ("Jev J1", "RRF (k=60)"),
+             ("Jev J1", "Dense only"), ("DAT (GPT-4o-mini)", "Fixed alpha 0.8 (dev-tuned)"), ("DAT (GPT-4o-mini)", "Dense only"),
+             ("Jev J3", "Fixed alpha 0.8 (dev-tuned)"), ("Jev J3", "Dense only")]
+    print("\n== Paired comparisons (95% bootstrap CI, 10,000 resamples) ==")
+    paired_rows = []
+    for a, b in pairs:
+        print_paired(f"{a} - {b}", per[a], per[b])
+        row = {"comparison": f"{a} - {b}"}
+        for metric in ("ndcg@10", "recall@10", "mrr@10", "p@1"):
+            mean, low, high = paired_bootstrap_ci(per[a][metric], per[b][metric])
+            row.update({metric: mean, f"{metric}_low": low, f"{metric}_high": high})
+        sd = float(np.std(per[a]["ndcg@10"] - per[b]["ndcg@10"], ddof=1))
+        row["ndcg@10_mde_80pct_power"] = 2.80 * sd / math.sqrt(323)
+        paired_rows.append(row)
+    write_rows(paired_rows, RESULTS / "paired_comparisons.csv")
+    print("\n== Smallest nDCG@10 difference detectable with 80% power at alpha 0.05 (2.8 x SD / sqrt(323)) ==")
+    for r in paired_rows:
+        print(f"  {r['comparison']:<52} {r['ndcg@10_mde_80pct_power']:.4f}")
+
+    # 4. Oracle headroom: best grid alpha per query, chosen with the labels.
+    grid = {a: per_query_for_alpha(TEST, a)["ndcg@10"] for a in ALPHA_GRID}
+    oracle = np.max(np.stack(list(grid.values())), axis=0)
+    print(f"\n== Oracle per-query alpha (upper bound for any per-query weighting, uses test labels) ==")
+    print(f"  NFCorpus nDCG@10: oracle {oracle.mean():.4f} vs best fixed on test {max(v.mean() for v in grid.values()):.4f} "
+          f"vs dev-tuned 0.8 {grid[0.8].mean():.4f}; judges {', '.join(f'{n} {summarize(per[n])['ndcg@10']:.4f}' for n in ('DAT (GPT-4o-mini)', 'Jev J1', 'Jev J3'))}")
+    sensitive = np.ptp(np.stack(list(grid.values())), axis=0) > 1e-12
+    print(f"  queries whose nDCG@10 changes across the alpha grid: {sensitive.sum()} of 323")
+    try:
+        from baseline.evaluate import load_normalized, ranks_over_grid  # SQuAD, read-only
+        nd, nb, gold = load_normalized("test")
+        sq = ranks_over_grid(nd, nb, gold)
+        print(f"  SQuAD P@1 (read-only from its caches): oracle {np.mean(sq.min(axis=1) == 1):.4f} vs fixed 0.6 {np.mean(sq[:, 6] == 1):.4f}")
+    except SystemExit:
+        print("  (SQuAD caches not available for the oracle comparison)")
+    return per
+
+
 def main():
     parser = argparse.ArgumentParser(description="NFCorpus analyses")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("retrieval", "baselines", "dat", "j1", "j3"):
+    for name in ("retrieval", "baselines", "dat", "j1", "j3", "final"):
         sub.add_parser(name)
     args = parser.parse_args()
     if args.command == "retrieval":
@@ -542,6 +625,8 @@ def main():
         j1_analysis()
     elif args.command == "j3":
         j3_analysis()
+    elif args.command == "final":
+        final_analysis()
 
 
 if __name__ == "__main__":

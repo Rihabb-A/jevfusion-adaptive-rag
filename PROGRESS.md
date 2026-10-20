@@ -75,8 +75,8 @@ paragraphs per retriever instead of top-1.
 | 4 | N6 | DAT (GPT-4o-mini) on NFCorpus | done: **DAT below dev-tuned fixed alpha** (-1.32 nDCG) | $0.054 |
 | 4 | N7 | Jev J1 on NFCorpus | done: **J1 = DAT (+0.53 n.s.) at 2.6x lower cost; below fixed 0.8** | $0.021 |
 | 4 | N8 | Jev J3 on NFCorpus | done: **J3 = J1 (-0.15 n.s.); SQuAD penalty gone, no gain** | $0.056 |
-| 4 | N9 | Full analysis | **in progress** | free |
-| 4 | N10 | Fair latency | to do | ~$0.05 |
+| 4 | N9 | Full analysis | done: no judge beats dev-tuned fixed alpha; J1 = DAT at 2.6x lower cost | free |
+| 4 | N10 | Fair latency | **in progress** | ~$0.05 |
 | 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
 
 **Spend so far: $1.383 of $20** (see §8).
@@ -1912,3 +1912,159 @@ subgroup sizes (e.g. 34 BM25-more queries) are small.
 
 **Next:** N9, the full consolidated analysis recomputed from the saved
 outputs.
+
+**Git (N8):** commit `d0633ec` on `extension/nfcorpus` (not pushed).
+
+### N9 Full scientific analysis (done, free)
+
+**Objective:** recompute every NFCorpus result directly from the saved
+score matrices, judge caches and official labels; consolidate; test the
+key differences statistically; compare with SQuAD; separate measurements,
+statistical evidence, plausible explanations and open hypotheses.
+
+**Command:** `python -m extension.nfcorpus_analysis final` (no API
+calls). Outputs: `results/nfcorpus/final_comparison.csv`,
+`results/nfcorpus/paired_comparisons.csv`.
+
+**Integrity checks (all passed):** the 323 evaluated test query ids are
+exactly the official test labels' ids, in the same order for BM25, dense,
+DAT, J1 and J3; the DAT, J1 and J3 caches hold a valid reply for every
+test query (the loaders stop otherwise).
+
+#### Measured results (NFCorpus test, 323 queries)
+
+| Method | nDCG@10 | Recall@10 | MRR@10 | P@1 | Judge cost / 1,000 queries |
+|---|---:|---:|---:|---:|---:|
+| BM25 only | 0.3067 | 0.1522 | 0.5097 | 0.4272 | $0 |
+| Dense only | 0.4220 | 0.2108 | 0.6253 | 0.5418 | $0 |
+| RRF (k=60) | 0.3699 | 0.1787 | 0.6017 | 0.5263 | $0 |
+| Fixed alpha 0.6 (transferred from SQuAD) | 0.4035 | 0.2039 | 0.6196 | 0.5325 | $0 |
+| **Fixed alpha 0.8 (tuned on NFCorpus dev)** | **0.4252** | **0.2110** | **0.6424** | **0.5604** | $0 |
+| DAT (GPT-4o-mini) | 0.4120 | 0.2042 | 0.6308 | 0.5480 | $0.158 |
+| Jev J1 | 0.4173 | 0.2069 | 0.6372 | 0.5542 | **$0.062** |
+| Jev J3 | 0.4158 | 0.2073 | 0.6290 | 0.5449 | $0.164 |
+
+#### Statistical evidence (paired bootstrap, 10,000 resamples)
+
+| Comparison | nDCG@10 [95% CI] | Recall@10 | MRR@10 | P@1 | Smallest detectable nDCG@10 difference* |
+|---|---|---|---|---|---:|
+| Jev J1 - DAT | +0.0053 [-0.0028, +0.0135] | +0.0027 [-0.0027, +0.0083] | +0.0065 [-0.0103, +0.0235] | +0.0062 [-0.0217, +0.0341] | 0.0118 |
+| Jev J1 - Jev J3 | +0.0015 [-0.0050, +0.0082] | -0.0004 [-0.0042, +0.0032] | +0.0082 [-0.0067, +0.0237] | +0.0093 [-0.0155, +0.0341] | 0.0096 |
+| Jev J3 - DAT | +0.0038 [-0.0046, +0.0127] | +0.0032 [-0.0013, +0.0078] | -0.0018 [-0.0157, +0.0114] | -0.0031 [-0.0279, +0.0186] | 0.0122 |
+| Jev J1 - fixed 0.6 | **+0.0138 [+0.0042, +0.0239]** | +0.0030 [-0.0024, +0.0086] | +0.0176 [-0.0033, +0.0393] | +0.0217 [-0.0124, +0.0557] | 0.0141 |
+| Jev J1 - fixed 0.8 (dev) | -0.0079 [-0.0159, +0.0000] | -0.0041 [-0.0104, +0.0019] | -0.0052 [-0.0232, +0.0122] | -0.0062 [-0.0372, +0.0217] | 0.0114 |
+| Jev J1 - RRF | **+0.0475 [+0.0318, +0.0638]** | +0.0282 [+0.0178, +0.0399] | +0.0355 [+0.0057, +0.0657] | +0.0279 [-0.0155, +0.0712] | 0.0228 |
+| Jev J1 - dense | -0.0047 [-0.0151, +0.0057] | -0.0039 [-0.0097, +0.0014] | +0.0120 [-0.0088, +0.0328] | +0.0124 [-0.0186, +0.0433] | 0.0148 |
+| DAT - fixed 0.8 (dev) | **-0.0132 [-0.0214, -0.0056]** | -0.0068 [-0.0120, -0.0021] | -0.0116 [-0.0264, +0.0027] | -0.0124 [-0.0372, +0.0124] | 0.0111 |
+| DAT - dense | -0.0100 [-0.0218, +0.0021] | -0.0067 [-0.0137, +0.0003] | +0.0055 [-0.0181, +0.0288] | +0.0062 [-0.0279, +0.0402] | 0.0171 |
+| Jev J3 - fixed 0.8 (dev) | **-0.0094 [-0.0170, -0.0020]** | -0.0037 [-0.0090, +0.0017] | -0.0134 [-0.0299, +0.0027] | -0.0155 [-0.0433, +0.0124] | 0.0108 |
+| Jev J3 - dense | -0.0062 [-0.0172, +0.0048] | -0.0035 [-0.0094, +0.0023] | +0.0037 [-0.0196, +0.0269] | +0.0031 [-0.0310, +0.0372] | 0.0157 |
+
+\* 2.8 x SD of the per-query difference / sqrt(323): the true difference
+this sample detects with 80% power at the 5% level.
+
+**Power:** with 323 queries, differences between the judges smaller than
+about **1 nDCG@10 point** cannot be reliably detected. The judge-vs-judge
+differences measured here (0.15-0.53 points) are below that, so "not
+significant" means **inconclusive, not equal**. SQuAD's 2,996 questions
+gave far narrower intervals.
+
+**Headroom (oracle, uses test labels; an upper bound, not a method):**
+choosing the best grid alpha per query would give nDCG@10 **0.4622**
+(dev-tuned fixed: 0.4252, best fixed on test: 0.4296); 230 of 323 queries
+change with alpha. So per-query weighting *could* gain up to ~3.7 points
+over the tuned fixed alpha, but all three judges lose 0.8-1.3 points
+instead. On SQuAD (read-only from its caches), the oracle P@1 was 0.9162
+vs fixed 0.6's 0.8571 (+5.9 points); DAT captured 1.6 of those points and
+Jev J1 3.3.
+
+#### SQuAD vs NFCorpus
+
+| | SQuAD (test) | NFCorpus (test) |
+|---|---|---|
+| Queries | 2,996 | 323 |
+| Corpus | 621 paragraphs (743 chars) | 3,633 documents (1,591 chars) |
+| Relevant per query | exactly 1 | mean 38.2, median 16 |
+| Labels | exact (answer-containing paragraph) | graded 1/2, citation-based, incomplete |
+| Queries | questions, mean 10.1 words | topics/titles, mean 3.3, median 2 words |
+| Primary metric | P@1 | nDCG@10 |
+| BM25 vs dense | 0.761 vs 0.773 (near equal) | 0.307 vs 0.422 (dense +11.5) |
+| Both retrievers' top-1 identical | 66.8% | 26.9% |
+| Best fixed alpha (tuning split) | 0.6 | 0.8 |
+| Tuned fixed fusion vs best single retriever | +8.4 P@1 points | +0.3 nDCG points (n.s.) |
+| Oracle headroom over tuned fixed alpha | +5.9 | +3.7 |
+| **DAT - tuned fixed alpha** | **+1.64 (significant)** | **-1.32 (significant)** |
+| **Jev J1 - DAT** | **+1.64 (significant)** | **+0.53 (n.s.)** |
+| **Jev J3 - Jev J1** | **-1.90 (significant)** | **-0.15 (n.s.)** |
+| Alpha = 0.5 share (DAT / J1 / J3) | 67.9% / 70.9% / 50.8% | 35.0% / 46.7% / 36.8% |
+| Wrong-way share, one-relevant queries (DAT / J1 / J3) | 8.4% / 1.3% / 9.8% | 14.5% / 15.7% / 14.5% |
+| Judge cost per 1,000 queries (DAT / J1 / J3) | $0.110 / $0.047 / $0.118 | $0.158 / $0.062 / $0.164 |
+
+#### Interpretation
+
+**Measured (certain):** on NFCorpus no judge beats the dev-tuned fixed
+alpha 0.8; DAT and J3 are significantly below it, J1 borderline. All
+judges beat the transferred alpha 0.6, RRF and BM25. Jev J1 is 2.6x
+cheaper than DAT; J3 costs about as much as DAT.
+
+**Plausible explanations (supported by N4-N8 data, not proven):**
+1. *The neutral default is miscalibrated for this dataset.* DAT's Eq. 6
+   gives 0.5 whenever the two top-1 judgments tie (35-47% of queries).
+   0.5 was near-optimal on SQuAD (best fixed 0.6) but is well below the
+   best fixed weight on NFCorpus (0.8), so every tie costs quality.
+2. *Top-1 is a weak signal when many documents are relevant.* nDCG@10
+   depends on ranks 1-10, and the top-1 document says little about the
+   other nine; even when both retrievers return the same document (87
+   queries), alpha changes nDCG@10, which could not happen for SQuAD's
+   P@1.
+3. *Judge relevance and label relevance only partly agree* (Spearman
+   0.43-0.51); both judges give 4-5 to about a third of grade-0 documents,
+   some of which may be unlabeled relevant documents. Weights are steered
+   toward the judge's notion of relevance, not the metric's.
+4. *The judges rarely pick BM25 when BM25 is better* (17-27% of those 60
+   queries), and moving alpha toward BM25 mostly loses on NFCorpus
+   (J1 vs DAT and J3 vs J1 disagreements). Dense dominates here, so the
+   benefit of adaptivity is concentrated in few queries.
+
+**Hypotheses requiring further experiments (not tested, would change the
+approved methodology):** a dense-leaning or dev-calibrated neutral
+alpha; replacing the top-1 signal with an aggregate better matched to
+nDCG@10; a stemmed BM25 (stronger BM25 would change the balance); a
+larger multi-relevance test set to detect sub-1-point differences.
+
+#### Answers to the research questions on NFCorpus
+
+- **RQ1 (Jev instead of GPT-4o-mini):** quality **not distinguishable**
+  from DAT (+0.53 nDCG@10, n.s.; the study cannot detect differences below
+  ~1.2 points), at **2.6x lower cost**. The cost advantage generalizes;
+  SQuAD's quality advantage does not (it is neither confirmed nor ruled
+  out at this sample size).
+- **RQ2 (top-3 vs top-1):** **no improvement** (-0.15, n.s.). SQuAD's
+  significant penalty disappears, consistent with the single-gold
+  explanation, and J3's judgments align best with the labels, but J3 does
+  not rank better and costs 2.7x J1.
+- **RQ3 (judges vs zero-judge baselines):** judges beat RRF (+4.2 to +4.8
+  points) and the *transferred* fixed alpha (+0.9 to +1.4), but **not** a
+  fixed alpha tuned on 324 dev queries (-0.8 to -1.3) and not dense alone.
+  On NFCorpus a judge is not worth its cost against a dev-tuned fixed
+  weight. This **challenges** the SQuAD finding that adaptive judges beat
+  fixed fusion: that advantage appears dataset-dependent.
+
+#### Threats to validity
+
+- Small test set (323 queries; ~1-point detection limit).
+- Incomplete, citation-based labels (unjudged = not relevant), which may
+  penalize judges that find relevant but unlabeled documents.
+- BM25 deliberately unstemmed (1.5 points below the Anserini reference).
+- One dataset per regime; the dev-tuned alpha uses the same domain's dev
+  split, an advantage the judges (zero-shot) did not get.
+- Prompts, rubric, mappings and option C were fixed on SQuAD and not
+  adapted to topical queries (by design: zero-shot).
+- The same document text was sent whole (no truncation); judges ran with
+  8 parallel requests (affects only latency, measured separately in N10).
+
+**Problems:** none. **Tests:** 104 passed. **Cost:** $0. **Project
+total:** $1.6756 of $20 (NFCorpus $0.2921).
+
+**Next:** N10, fair latency on 100 NFCorpus test queries with the SQuAD
+protocol.
