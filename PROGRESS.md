@@ -719,7 +719,7 @@ conversation for the team to post.
 | `47e63ff` | extension/nfcorpus | N7: Jev J1 on NFCorpus |
 | `d0633ec` | extension/nfcorpus | N8: Jev J3 on NFCorpus |
 | `71a0acc` | extension/nfcorpus | N9: consolidated analysis |
-| (see §12 N10 / git log) | extension/nfcorpus | N10: latency, NFCorpus docs, consolidated section |
+| `a0efe16` | extension/nfcorpus | N10: latency, NFCorpus docs, consolidated section, final verification |
 
 | `f5da052` | main | Merge pull request #1 from `baseline/setup` (merge commit, not squash) |
 
@@ -2154,6 +2154,8 @@ times from one location and one time window; 100 queries per judge.
 **Documentation updated:** new `extension/NFCORPUS.md` (full NFCorpus
 write-up for the paper), new §11 in `extension/README.md` (summary and
 link), this file.
+
+**Git (N10):** commit `a0efe16` on `extension/nfcorpus` (not pushed).
 
 **Next:** see §10 (awaiting your review; no push, PR or N11 without
 approval).
