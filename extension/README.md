@@ -358,3 +358,26 @@ Run times are with 8 parallel requests and vary with API load.
 
 Full ledger: `results/budget_ledger.csv`. Working log with every step,
 decision and problem: [`PROGRESS.md`](../PROGRESS.md).
+
+## 11. Second dataset: BEIR NFCorpus
+
+Everything above is on SQuAD. We repeated the experiment, zero-shot (same
+prompt, rubric, `top_level` mapping and J3 option C), on BEIR NFCorpus:
+many relevant documents per query, graded labels, short topical queries.
+Full write-up, tables and reproduce commands: [`NFCORPUS.md`](NFCORPUS.md).
+
+| NFCorpus test (323 queries) | nDCG@10 | Judge cost / 1,000 queries | Judge latency p50 |
+|---|---:|---:|---:|
+| Fixed alpha 0.8 (tuned on NFCorpus dev) | **0.4252** | $0 | none |
+| Dense only | 0.4220 | $0 | none |
+| Jev J1 | 0.4173 | **$0.062** | **0.92 s** |
+| Jev J3 | 0.4158 | $0.164 | 0.97 s |
+| DAT (GPT-4o-mini) | 0.4120 | $0.158 | 1.43 s |
+
+On NFCorpus, Jev J1 vs DAT is +0.53 nDCG@10 points (not significant,
+inconclusive at 323 queries) at 2.6x lower cost and faster on 94% of
+queries; J3 vs J1 is -0.15 (not significant: the SQuAD top-3 penalty
+disappears with multiple relevant documents, but no gain appears); and no
+judge beats a fixed weight tuned on NFCorpus dev data. The SQuAD finding
+that adaptive judges beat fixed fusion is therefore dataset-dependent.
+Project total after both datasets: $1.714 of $20.

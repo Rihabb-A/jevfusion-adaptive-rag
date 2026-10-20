@@ -65,14 +65,15 @@ def to_dat_score(judgment, mapping):
     raise ValueError(f"unknown mapping {mapping!r}")
 
 
-def load_judgments(set_name, k):
+def load_judgments(set_name, k, candidates=None):
     """Valid Jev judgments per question, in queries.jsonl order (the row
     order evaluate.py uses). Stops if any question lacks a valid reply,
-    rather than silently defaulting it."""
+    rather than silently defaulting it. `candidates` (optional): another
+    dataset's rows, in its own evaluation order (default: SQuAD's)."""
     _, _, model = jev_config()
     cache = JudgeCache(cache_path(model, set_name, k))
     out = []
-    for row in topk_candidates(set_name, k):
+    for row in candidates if candidates is not None else topk_candidates(set_name, k):
         body = build_request(model, row["question"], row["passages"])
         record = cache.get(request_key(model, json.dumps(body, sort_keys=True, ensure_ascii=False), {}))
         if record is None or record.get("judgments") is None:

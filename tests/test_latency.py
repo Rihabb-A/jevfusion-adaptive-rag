@@ -10,6 +10,22 @@ def test_percentile_interpolates():
     assert percentile(values, 95) == pytest.approx(48)
 
 
+def test_call_counts_http_attempts(monkeypatch):
+    from extension import latency
+
+    judges = latency.Judges.__new__(latency.Judges)  # skip __init__ (no config, no data)
+
+    def fake_inner(judge, index):
+        latency.requests.post("https://example.invalid/1")
+        latency.requests.post("https://example.invalid/2")  # a retry
+        return {"latency_ms": 1.0}
+
+    monkeypatch.setattr(latency.requests, "post", lambda *a, **kw: None)
+    judges._call = fake_inner
+    assert judges.call("Jev J1", 0) == {"latency_ms": 1.0, "attempts": 2}
+    assert latency.requests.post("x") is None  # the counting wrapper was removed
+
+
 def test_json_round_trip_turns_tuples_into_lists():
     # Why latency.py compares lists: cached DAT scores come back from JSON as lists.
     import json
