@@ -7,8 +7,8 @@ completed step until the project ends.
 **Last updated:** 20 October 2026, after Phase 4 Step N10. **The SQuAD
 work (Phases 1-2) and the BEIR NFCorpus experiment (Phase 4, N1-N10) are
 complete** on branch `extension/nfcorpus` (local commits, not pushed).
-The baseline PR (#1) is merged; `extension/jev` is pushed and its PR is
-for the team to open. N11 (push/PR for NFCorpus) and the paper await
+The baseline PR (#1) and the SQuAD extension PR (#2, merge commit
+`07e8555`, seen 21 Oct 2026) are merged into `main`. N11 (push/PR for NFCorpus) and the paper await
 approval.
 
 **Every result in one place:** SQuAD: [§11](#11-consolidated-results-every-table-and-analysis);
@@ -722,6 +722,7 @@ conversation for the team to post.
 | `a0efe16` | extension/nfcorpus | N10: latency, NFCorpus docs, consolidated section, final verification |
 
 | `f5da052` | main | Merge pull request #1 from `baseline/setup` (merge commit, not squash) |
+| `07e8555` | main | Merge pull request #2 from `extension/jev` (SQuAD extension) |
 
 `extension/jev` starts from `baseline/setup`. Since PR #1 was merged with
 a merge commit, `origin/main...extension/jev` contains only the 16
@@ -773,9 +774,9 @@ GPT-4o-mini top-3 control (~$0.70), DRCD (~$0.40).
   20 Oct 2026). Make sure the baseline issue is closed with its
   acceptance criteria ticked (GitHub numbers issues and PRs together,
   so check the issue's real number before writing "Closes #N").
-- ~~Approve pushing `extension/jev`~~ done. Open Issue 3 and the extension
-  PR (`main...extension/jev`) with the drafted texts; teammate review;
-  merge with a merge commit; close Issue 3.
+- ~~Approve pushing `extension/jev`; open and merge its PR~~ done (PR #2,
+  merge commit `07e8555`). Check that Issue 3 is closed with its
+  acceptance criteria ticked.
 - Review the NFCorpus work: `extension/NFCORPUS.md`, §12 (N1-N10), §13.
 - Approve or not: N11 (push `extension/nfcorpus`, PR after the extension
   PR is merged).
@@ -794,7 +795,9 @@ extension commits.
 `extension/nfcorpus`. Nothing was pushed. Awaiting the team's review of
 `extension/NFCORPUS.md` and §13, then a decision on N11 (push and PR,
 best after the `extension/jev` PR is merged so the NFCorpus PR shows only
-its own commits) and on writing the paper (Phase 3).
+its own commits; PR #2 is merged, so that condition is now met) and on
+writing the paper (Phase 3). Template Markdown files still to fill: root
+`README.md`, `data/README.md`, `report/REPORT.md`, `slides/`.
 
 ---
 
