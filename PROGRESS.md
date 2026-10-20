@@ -6,7 +6,7 @@ completed step until the project ends.
 
 **Last updated:** 20 October 2026, after Phase 4 Step N10. **The SQuAD
 work (Phases 1-2) and the BEIR NFCorpus experiment (Phase 4, N1-N10) are
-complete** on branch `extension/nfcorpus` (local commits, not pushed).
+complete** on branch `extension/nfcorpus` (pushed 21 Oct 2026 after approval; its PR is for the team to open).
 The baseline PR (#1) and the SQuAD extension PR (#2, merge commit
 `07e8555`, seen 21 Oct 2026) are merged into `main`. N11 (push/PR for NFCorpus) and the paper await
 approval.
@@ -78,7 +78,8 @@ paragraphs per retriever instead of top-1.
 | 4 | N8 | Jev J3 on NFCorpus | done: **J3 = J1 (-0.15 n.s.); SQuAD penalty gone, no gain** | $0.056 |
 | 4 | N9 | Full analysis | done: no judge beats dev-tuned fixed alpha; J1 = DAT at 2.6x lower cost | free |
 | 4 | N10 | Fair latency | done: **J1 0.92 s vs DAT 1.43 s p50; faster on 94%** | $0.039 |
-| 4 | N11 | NFCorpus push/PR (and paper) | **awaiting approval** | free |
+| 4 | N11 | Root and data READMEs; push `extension/nfcorpus` | done (approved 21 Oct); **NFCorpus PR to open** | free |
+| 3 | 3.1-3.3 (again) | Report, slides, defense with both datasets | **next** | free |
 | 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
 
 **Spend so far: $1.383 of $20** (see §8).
@@ -778,8 +779,8 @@ GPT-4o-mini top-3 control (~$0.70), DRCD (~$0.40).
   merge commit `07e8555`). Check that Issue 3 is closed with its
   acceptance criteria ticked.
 - Review the NFCorpus work: `extension/NFCORPUS.md`, §12 (N1-N10), §13.
-- Approve or not: N11 (push `extension/nfcorpus`, PR after the extension
-  PR is merged).
+- ~~N11: push `extension/nfcorpus`~~ done (21 Oct). Open its PR
+  (`main...extension/nfcorpus`) with the drafted text; review; merge.
 - Phase 3: `report/REPORT.md` (now with two datasets), slides (max 8),
   defense rehearsal.
 - Decide later: DRCD; the optional GPT-4o-mini top-3 control run.
@@ -791,13 +792,13 @@ GPT-4o-mini top-3 control (~$0.70), DRCD (~$0.40).
 (texts drafted in the conversation), review, merge. The PR shows only the
 extension commits.
 
-**NFCorpus:** N1-N10 are complete and committed locally on
-`extension/nfcorpus`. Nothing was pushed. Awaiting the team's review of
+**NFCorpus:** N1-N11 are complete; `extension/nfcorpus` was pushed on
+21 Oct 2026 after approval; its PR is for the team to open. Awaiting the team's review of
 `extension/NFCORPUS.md` and §13, then a decision on N11 (push and PR,
 best after the `extension/jev` PR is merged so the NFCorpus PR shows only
 its own commits; PR #2 is merged, so that condition is now met) and on
-writing the paper (Phase 3). Template Markdown files still to fill: root
-`README.md`, `data/README.md`, `report/REPORT.md`, `slides/`.
+writing the paper (Phase 3). Root `README.md` and `data/README.md` were
+rewritten in N11; still to fill: `report/REPORT.md` and the slides.
 
 ---
 
@@ -2279,3 +2280,41 @@ One check first looked like a failure: the data-checksum comparison
 reported differences, but they were only 6 *added* NFCorpus judge cache
 files in the shared judge folders (no SQuAD file changed); the filter was
 corrected to exclude NFCorpus-named files and the check passed.
+
+### N11 Root and data READMEs; push `extension/nfcorpus` (done, free)
+
+**Approved 21 Oct 2026:** "approve push and update the readme".
+
+**State found:** the SQuAD extension PR (#2) had been merged into `main`
+(`07e8555`), recorded in commit `10749fb`.
+
+**Documentation:**
+- `README.md` (root) rewritten from the course template: project and paper,
+  results at a glance on both datasets (SQuAD P@1, NFCorpus nDCG@10, judge
+  cost), one-sentence answers to the reproduction and RQ1-RQ3, a map of
+  every deliverable, repository layout, setup with the required `.env`
+  keys, links to the three reproduce sections with cost, the workflow
+  (issues, branches, PRs #1-#2, decisions fixed before seeing test data),
+  and the template's data rules.
+- `data/README.md` rewritten: the template's rules kept; how SQuAD and
+  NFCorpus are obtained (official sources, scripts, MD5), what each set
+  contains, the committed manifests, a table of every cache with the
+  command and API cost to rebuild it, dataset-named caches, and the
+  OneDrive lost-writes safeguard.
+- All README links checked against the target headings; 105 tests pass.
+
+**Markdown status after N11:** up to date: `README.md`, `data/README.md`,
+`baseline/README.md`, `extension/README.md`, `extension/NFCORPUS.md`,
+`PROGRESS.md`. Course templates kept as guides: `CONTRIBUTING.md`,
+`slides/README.md`. Still to write: `report/REPORT.md` and the slides
+(Phase 3).
+
+**Push:** secret scan of every commit on the branch since `main` and a
+check that no `.env`, dataset or cache file is included, then
+`git push -u origin extension/nfcorpus`.
+
+**Cost:** $0. **Project total:** $1.7144 of $20.
+
+**Next:** the team opens the NFCorpus PR (`main...extension/nfcorpus`),
+reviews and merges it; then Phase 3: `report/REPORT.md` and the slides,
+now covering both datasets.
