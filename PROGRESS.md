@@ -4,19 +4,20 @@ A detailed, cumulative record of everything done in this project: what we
 did, how, why, what it cost and what came out. Updated after every
 completed step until the project ends.
 
-**Last updated:** 20 October 2026, after Phase 4 Step N2 (graded
-metrics for NFCorpus, on branch `extension/nfcorpus`). Earlier the same
-day: the baseline PR (#1) was merged into `main` and `extension/jev` was
-pushed. **The SQuAD work (Phases 1 and 2) is complete;** the extension
-PR is for the team to open. **Phase 4 (BEIR NFCorpus) is in progress**,
-one approved step at a time (§12).
+**Last updated:** 20 October 2026, after Phase 4 Step N10. **The SQuAD
+work (Phases 1-2) and the BEIR NFCorpus experiment (Phase 4, N1-N10) are
+complete** on branch `extension/nfcorpus` (local commits, not pushed).
+The baseline PR (#1) is merged; `extension/jev` is pushed and its PR is
+for the team to open. N11 (push/PR for NFCorpus) and the paper await
+approval.
 
-**Every result table and analysis in one place:** [§11 Consolidated
-results](#11-consolidated-results-every-table-and-analysis).
+**Every result in one place:** SQuAD: [§11](#11-consolidated-results-every-table-and-analysis);
+NFCorpus: [§13](#13-nfcorpus-consolidated-results).
 
 The formal deliverables are separate and are what graders read:
-`baseline/README.md` (DAT reproduction), `extension/README.md` (JevFusion,
-not written yet), `report/REPORT.md` and `slides/`. This file is the
+`baseline/README.md` (DAT reproduction), `extension/README.md` (JevFusion
+on SQuAD, with an NFCorpus summary), `extension/NFCORPUS.md` (NFCorpus
+write-up), `report/REPORT.md` and `slides/`. This file is the
 working log behind them.
 
 ---
@@ -76,7 +77,8 @@ paragraphs per retriever instead of top-1.
 | 4 | N7 | Jev J1 on NFCorpus | done: **J1 = DAT (+0.53 n.s.) at 2.6x lower cost; below fixed 0.8** | $0.021 |
 | 4 | N8 | Jev J3 on NFCorpus | done: **J3 = J1 (-0.15 n.s.); SQuAD penalty gone, no gain** | $0.056 |
 | 4 | N9 | Full analysis | done: no judge beats dev-tuned fixed alpha; J1 = DAT at 2.6x lower cost | free |
-| 4 | N10 | Fair latency | **in progress** | ~$0.05 |
+| 4 | N10 | Fair latency | done: **J1 0.92 s vs DAT 1.43 s p50; faster on 94%** | $0.039 |
+| 4 | N11 | NFCorpus push/PR (and paper) | **awaiting approval** | free |
 | 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
 
 **Spend so far: $1.383 of $20** (see §8).
@@ -707,6 +709,17 @@ conversation for the team to post.
 | `d8fa29f` | extension/jev | Step 2.10: latency, final table |
 | `d6595d9` | extension/jev | This progress log (through 2.10, §11 consolidated results) |
 | `981583d` | extension/jev | Step 2.11: `extension/README.md`; PROGRESS fixes |
+| `c68027f`, `48179a5` | extension/jev | PROGRESS: PR #1 merged; branch pushed |
+| `ce144bc` | extension/nfcorpus | N1: NFCorpus download/verification, plan |
+| `34c1f89`, `13f782b` | extension/nfcorpus | N2: graded metrics (+ hash record) |
+| `73d7808` | extension/nfcorpus | N3: BM25 and dense retrieval |
+| `5ba13c4` | extension/nfcorpus | N4: zero-judge baselines |
+| `47e467b` | extension/nfcorpus | N5: judge pipeline for named datasets, SQuAD regression |
+| `bf3d9ff` | extension/nfcorpus | N6: DAT on NFCorpus |
+| `47e63ff` | extension/nfcorpus | N7: Jev J1 on NFCorpus |
+| `d0633ec` | extension/nfcorpus | N8: Jev J3 on NFCorpus |
+| `71a0acc` | extension/nfcorpus | N9: consolidated analysis |
+| (see §12 N10 / git log) | extension/nfcorpus | N10: latency, NFCorpus docs, consolidated section |
 
 | `f5da052` | main | Merge pull request #1 from `baseline/setup` (merge commit, not squash) |
 
@@ -715,7 +728,9 @@ a merge commit, `origin/main...extension/jev` contains only the 16
 extension commits (23 files), so the extension PR needs no rebase.
 `extension/jev` was **pushed on 20 Oct 2026 after approval** (secret
 scan of all branch commits clean; no `.env` or cache files among the 23
-changed files). **72 unit tests** pass (`pytest`).
+changed files). `extension/nfcorpus` (Phase 4) starts from
+`extension/jev` and is **local only (not pushed)**. **105 unit tests**
+pass (`pytest`) at the end of N10.
 
 Local only (gitignored): `.env`, `.venv/`, `data/` (SQuAD, score matrices,
 embedding cache, judge caches). Not committed by choice: the paper PDF and
@@ -737,10 +752,17 @@ From `results/budget_ledger.csv` (every paid batch, billed cost):
 | Jev J3 tune (incl. 8 re-judged) | 2,873 | $0.3349 |
 | Jev J3 test | 2,996 | $0.3530 |
 | Latency measurement, 2 runs x 3 judges (incl. warm-up) | 612 | $0.0561 |
-| **Total** | | **$1.383 of $20** |
+| **SQuAD subtotal** | | **$1.3834** |
+| NFCorpus N3 embeddings (corpus + dev/test queries) | 68 | $0.1602 |
+| NFCorpus N6 DAT (pilot + test) | 343 | $0.0544 |
+| NFCorpus N7 Jev J1 (pilot + test) | 343 | $0.0211 |
+| NFCorpus N8 Jev J3 (pilot + test) | 343 | $0.0564 |
+| NFCorpus N10 latency (3 judges x 102) | 306 | $0.0389 |
+| **NFCorpus subtotal** (cap $2) | | **$0.3310** |
+| **Total** | | **$1.7144 of $20** ($18.29 left) |
 
-No further spend is planned for the core project. Optional extras: DAT
-with GPT-4o (~$5.30), GPT-4o-mini top-3 control (~$0.70), DRCD (~$0.40).
+No further spend is planned. Optional extras: DAT with GPT-4o (~$5.30),
+GPT-4o-mini top-3 control (~$0.70), DRCD (~$0.40).
 
 ---
 
@@ -754,7 +776,11 @@ with GPT-4o (~$5.30), GPT-4o-mini top-3 control (~$0.70), DRCD (~$0.40).
 - ~~Approve pushing `extension/jev`~~ done. Open Issue 3 and the extension
   PR (`main...extension/jev`) with the drafted texts; teammate review;
   merge with a merge commit; close Issue 3.
-- Phase 3: `report/REPORT.md`, slides (max 8), defense rehearsal.
+- Review the NFCorpus work: `extension/NFCORPUS.md`, §12 (N1-N10), §13.
+- Approve or not: N11 (push `extension/nfcorpus`, PR after the extension
+  PR is merged).
+- Phase 3: `report/REPORT.md` (now with two datasets), slides (max 8),
+  defense rehearsal.
 - Decide later: DRCD; the optional GPT-4o-mini top-3 control run.
 
 ## 10. Next step
@@ -764,11 +790,11 @@ with GPT-4o (~$5.30), GPT-4o-mini top-3 control (~$0.70), DRCD (~$0.40).
 (texts drafted in the conversation), review, merge. The PR shows only the
 extension commits.
 
-**After the SQuAD review:** the BEIR NFCorpus phase starts with a plan
-only (no downloads, code or API calls): proposed small steps, what is
-reused, what is new (notably multi-document, graded relevance labels,
-which our SQuAD code assumes away: one `gold` paragraph per question),
-cost and time per step, and the recommended first step.
+**NFCorpus:** N1-N10 are complete and committed locally on
+`extension/nfcorpus`. Nothing was pushed. Awaiting the team's review of
+`extension/NFCORPUS.md` and §13, then a decision on N11 (push and PR,
+best after the `extension/jev` PR is merged so the NFCorpus PR shows only
+its own commits) and on writing the paper (Phase 3).
 
 ---
 
@@ -978,7 +1004,7 @@ and inside J3 for 92% of questions.
 
 ---
 
-## 12. Phase 4 plan: BEIR NFCorpus (proposed 20 Oct 2026, awaiting approval)
+## 12. Phase 4: BEIR NFCorpus (plan approved 20 Oct 2026; N1-N10 done)
 
 **Goal.** Test on a second dataset whether (1) Jev J1 generalizes beyond
 SQuAD, (2) J3 does better when several documents per query are relevant,
@@ -2068,3 +2094,183 @@ total:** $1.6756 of $20 (NFCorpus $0.2921).
 
 **Next:** N10, fair latency on 100 NFCorpus test queries with the SQuAD
 protocol.
+
+**Git (N9):** commit `71a0acc` on `extension/nfcorpus` (not pushed).
+
+### N10 Fair latency on NFCorpus (done)
+
+**Objective:** compare the judges' speed on NFCorpus with exactly the
+SQuAD protocol (Step 2.10), and track retries and outliers.
+
+**Implemented:** `extension/latency.py` gained `--dataset nfcorpus`
+(default stays `squad`; NFCorpus results go to `results/nfcorpus/`, so
+the SQuAD latency files cannot be overwritten), optional candidates for
+`Judges`, and an `attempts` count per timed call (the HTTP call is wrapped
+only while the call runs; both judge modules use `requests.post`), plus
+`calls_with_retries` and `outliers_over_3x_p50` in the summary. NFCorpus
+runs use the $2 NFCorpus budget guard. Test: 1 new (attempt counting and
+wrapper removal).
+
+**Command:** `python -m extension.latency --dataset nfcorpus --n 100`
+(sample: 100 of the 323 test queries, seed 0, plus 2 warm-up queries).
+**Protocol:** same queries for all judges; one request at a time; judge
+order rotated per query; 2 warm-up calls per judge discarded; fresh,
+uncached calls with the real request formats and settings; end-to-end
+client wall-clock time of the judge call only (not retrieval, not a RAG
+pipeline).
+
+**Results** (`results/nfcorpus/latency_summary.csv`, per call
+`results/nfcorpus/latency_test.csv`):
+
+| Judge | Calls OK | p50 | p95 | Mean | Max | Calls with retries | > 3x p50 | Same as cached |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| DAT (GPT-4o-mini) | 100/100 | 1,432 ms | 2,568 ms | 1,580 ms | 4,039 ms | 0 | 0 | 96% |
+| **Jev J1** | 100/100 | **916 ms** | **1,658 ms** | 1,041 ms | 2,861 ms | 0 | 1 | 89% |
+| Jev J3 | 100/100 | 968 ms | 1,589 ms | 1,059 ms | 2,352 ms | 0 | 0 | 78% (all 6 levels) |
+
+| Paired per query (10,000 resamples) | Median difference vs DAT | 95% CI | Faster than DAT on |
+|---|---:|---|---:|
+| **Jev J1** | **-496 ms** | [-528, -459] ms | **94%** |
+| Jev J3 | -449 ms | [-492, -424] ms | 95% |
+
+Order check: each judge's median is similar in every position (DAT
+1,415-1,454 ms; J1 912-925 ms; J3 932-1,034 ms). No failures, no retries.
+
+**Explanation:** Jev answers about half a second faster than GPT-4o-mini
+per query on NFCorpus, on almost every query, and J3's 2.7x larger input
+costs only ~50 ms more than J1. The absolute times are lower than in the
+SQuAD measurement (DAT 2.92 s, J1 2.35 s), which was taken on another day
+under different network conditions: compare judges within one run, not
+across datasets. The relative speed-up is consistent across both runs
+(about 0.5 s). Repeatability: J1 repeats its own levels on 89% of queries
+(SQuAD 95%), DAT on 96%.
+
+**Cost:** 306 calls, **$0.0389** (DAT $0.0157, J1 $0.0062, J3 $0.0169).
+NFCorpus total **$0.3310**; **project total $1.7144 of $20**.
+
+**Tests:** 105 passed. **Problems:** none. **Limitations:** client-side
+times from one location and one time window; 100 queries per judge.
+
+**Documentation updated:** new `extension/NFCORPUS.md` (full NFCorpus
+write-up for the paper), new §11 in `extension/README.md` (summary and
+link), this file.
+
+**Next:** see §10 (awaiting your review; no push, PR or N11 without
+approval).
+
+---
+
+## 13. NFCorpus consolidated results
+
+Everything measured on BEIR NFCorpus (test split, 323 queries) unless
+marked dev; zero-shot judges (SQuAD-chosen prompt, rubric, `top_level`
+mapping and J3 option C). Every number is recomputed from saved outputs
+(`results/nfcorpus/`). Detailed write-up: `extension/NFCORPUS.md`.
+
+### 13.1 Main table
+
+| Method | nDCG@10 | Recall@10 | MRR@10 | P@1 | Judge $ / 1,000 queries | Judge latency p50 / p95 |
+|---|---:|---:|---:|---:|---:|---|
+| BM25 only | 0.3067 | 0.1522 | 0.5097 | 0.4272 | $0 | none |
+| Dense only | 0.4220 | 0.2108 | 0.6253 | 0.5418 | $0 | none |
+| RRF (k=60) | 0.3699 | 0.1787 | 0.6017 | 0.5263 | $0 | none |
+| Fixed alpha 0.6 (transferred from SQuAD) | 0.4035 | 0.2039 | 0.6196 | 0.5325 | $0 | none |
+| **Fixed alpha 0.8 (tuned on dev)** | **0.4252** | **0.2110** | **0.6424** | **0.5604** | $0 | none |
+| DAT (GPT-4o-mini) | 0.4120 | 0.2042 | 0.6308 | 0.5480 | $0.158 | 1.43 s / 2.57 s |
+| Jev J1 | 0.4173 | 0.2069 | 0.6372 | 0.5542 | **$0.062** | **0.92 s / 1.66 s** |
+| Jev J3 | 0.4158 | 0.2073 | 0.6290 | 0.5449 | $0.164 | 0.97 s / 1.59 s |
+
+### 13.2 Key paired comparisons (nDCG@10, 95% CI)
+
+| Comparison | Difference | Reading |
+|---|---|---|
+| Jev J1 - DAT | +0.0053 [-0.0028, +0.0135] | not significant (detection limit ~0.012) |
+| Jev J1 - Jev J3 | +0.0015 [-0.0050, +0.0082] | not significant |
+| Jev J3 - DAT | +0.0038 [-0.0046, +0.0127] | not significant |
+| Jev J1 - fixed 0.6 | +0.0138 [+0.0042, +0.0239] | J1 better |
+| Jev J1 - fixed 0.8 (dev) | -0.0079 [-0.0159, +0.0000] | J1 lower, borderline |
+| DAT - fixed 0.8 (dev) | -0.0132 [-0.0214, -0.0056] | DAT worse |
+| Jev J3 - fixed 0.8 (dev) | -0.0094 [-0.0170, -0.0020] | J3 worse |
+| Jev J1 - RRF | +0.0475 [+0.0318, +0.0638] | J1 better |
+| Jev J1 - dense | -0.0047 [-0.0151, +0.0057] | not significant |
+| Fixed 0.8 (dev) - dense | +0.0032 [-0.0057, +0.0125] | not significant |
+| Fixed 0.6 - dense | -0.0185 [-0.0317, -0.0054] | fixed 0.6 worse |
+| Dense - BM25 | +0.1154 [+0.0918, +0.1395] | dense better |
+
+All four metrics for the judge comparisons: `results/nfcorpus/paired_comparisons.csv` and §12 N9.
+
+### 13.3 Findings
+
+1. **Retrieval regime:** dense beats BM25 by 11.5 nDCG@10 points (SQuAD:
+   level); the two top-1 documents agree on only 26.9% of queries; 25 test
+   queries match no document with BM25. Our unstemmed BM25 (0.3067) is
+   1.5 points below Anserini's 0.3218 for the same index; adding Porter
+   stemming reproduces 0.3218 exactly.
+2. **Fusion barely helps:** the dev-tuned alpha 0.8 is +0.3 points over
+   dense (n.s.); SQuAD's 0.6 transfers badly (-1.85 vs dense). RRF is the
+   weakest fusion method.
+3. **RQ1:** Jev J1 matches DAT within what 323 queries can detect (+0.53,
+   n.s.) at 2.6x lower cost and ~0.5 s lower latency on 94% of queries.
+   SQuAD's quality advantage is not confirmed (nor ruled out).
+4. **RQ2:** top-3 judging is no longer worse than top-1 (-0.15, n.s.;
+   SQuAD -1.90, significant), because relevant documents also appear at
+   #2-#3 (39-60% when #1 is relevant), but it brings no gain and costs
+   2.7x J1.
+5. **RQ3:** judges beat RRF and the transferred alpha but **not** the
+   dev-tuned fixed alpha (DAT -1.32 and J3 -0.94 significant; J1 -0.79
+   borderline) and not dense alone. Adaptive judging's advantage over fixed
+   fusion is dataset-dependent.
+6. **Mechanisms (plausible, data-supported):** DAT's Eq. 6 returns 0.5 on
+   ties (35-47% of queries), which is too much BM25 weight here (best
+   fixed 0.8); top-1 relevance says little about a top-10 ranking; judges
+   lean toward BM25 in only 17-27% of queries where BM25 ranks better.
+7. **Judgment quality:** agreement with the official grades is moderate
+   (Spearman DAT 0.433, J1 0.473, J3 0.511); Jev separates grade 2 from
+   grade 1, DAT does not; all judges rate about a third of grade-0
+   documents 4-5 (possibly unlabeled relevant documents).
+8. **Headroom:** an oracle per-query alpha would reach 0.4622 (+3.7 over
+   the tuned fixed weight); the judges capture none of it on NFCorpus,
+   whereas on SQuAD Jev J1 captured 3.3 of 5.9 points.
+
+### 13.4 What can and cannot be concluded
+
+- **Can:** Jev is a cheaper and faster judge than GPT-4o-mini for DAT on
+  both datasets, with no measurable quality loss; top-3 judging is not
+  worth its cost on either dataset; on NFCorpus a dev-tuned fixed weight
+  is at least as good as any judge.
+- **Cannot:** that Jev and DAT are equal on NFCorpus (inconclusive, ~1
+  point detection limit); that the judges would lose under a different
+  alpha rule or neutral default (untested hypothesis); that the low
+  rubric-label agreement is the judges' fault rather than the labels'
+  incompleteness.
+
+### 13.5 Spend
+
+| NFCorpus step | Cost |
+|---|---:|
+| N3 embeddings | $0.1602 |
+| N6 DAT (pilot + test) | $0.0544 |
+| N7 Jev J1 (pilot + test) | $0.0211 |
+| N8 Jev J3 (pilot + test) | $0.0564 |
+| N10 latency | $0.0389 |
+| **NFCorpus total** | **$0.3310** (cap $2) |
+| SQuAD (Phases 1-2) | $1.3834 |
+| **Project total** | **$1.7144 of $20** ($18.29 left) |
+
+### Final verification of Phase 4 (after N10)
+
+| Check | Result |
+|---|---|
+| Full test suite | **105 passed** |
+| SQuAD data and caches vs the backup checksums | **18/18 byte-identical** (NFCorpus files, including the new `nfcorpus-*` judge caches next to the SQuAD caches, excluded by name) |
+| SQuAD result files vs commit `c68027f` (before Phase 4) | **12/12 identical** (incl. SQuAD latency files) |
+| NFCorpus final analysis re-run from saved outputs | `final_comparison.csv`, `paired_comparisons.csv` reproduced **byte-identical** |
+| Judge caches complete, correct query ids | 323/323 test replies for DAT, J1, J3; ids = official test labels (checked by `nfcorpus_analysis final`) |
+| Numbers in docs vs result CSVs | `PROGRESS.md` 58/58; `extension/NFCORPUS.md` 58/58 after adding two CIs and dev scores |
+| Spend vs ledger | NFCorpus $0.3310, project $1.7144 (ledger sums) |
+| Branch | `extension/nfcorpus`, nothing pushed |
+
+One check first looked like a failure: the data-checksum comparison
+reported differences, but they were only 6 *added* NFCorpus judge cache
+files in the shared judge folders (no SQuAD file changed); the filter was
+corrected to exclude NFCorpus-named files and the check passed.

@@ -29,6 +29,7 @@ import statistics
 import time
 from pathlib import Path
 
+import requests
 from dotenv import load_dotenv
 
 from baseline import budget
@@ -62,19 +63,36 @@ class Judges:
     """Builds and sends one request per judge, in the exact format of the
     real runs, and reports latency, cost and agreement with the cache."""
 
-    def __init__(self, set_name):
+    def __init__(self, set_name, top1=None, topk=None):
+        """`top1` / `topk` ({1: rows, 3: rows}): another dataset's candidates
+        (e.g. NFCorpus); by default SQuAD's for `set_name`, as before."""
         load_dotenv(ROOT / ".env")
         self.or_key = os.getenv("OPENROUTER_API_KEY")
         self.or_base = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
         self.dat_model = os.getenv("DAT_JUDGE_MODEL", "openai/gpt-4o-mini")
         self.jev_key, self.jev_base, self.jev_model = jev_config()
         self.expected_jev = self.jev_model if VERSIONED_MODEL.fullmatch(self.jev_model) else None
-        self.top1 = top1_candidates(set_name)
-        self.topk = {1: topk_candidates(set_name, 1), 3: topk_candidates(set_name, 3)}
+        self.top1 = top1 if top1 is not None else top1_candidates(set_name)
+        self.topk = topk if topk is not None else {1: topk_candidates(set_name, 1), 3: topk_candidates(set_name, 3)}
         self.dat_cache = JudgeCache(dat_cache_path(self.dat_model, set_name))
         self.jev_cache = {k: JudgeCache(jev_cache_path(self.jev_model, set_name, k)) for k in (1, 3)}
 
     def call(self, judge, index):
+        """One timed call; `attempts` counts HTTP requests made (retries)."""
+        attempts = [0]
+        original_post = requests.post
+
+        def counting_post(*args, **kwargs):
+            attempts[0] += 1
+            return original_post(*args, **kwargs)
+
+        requests.post = counting_post  # both judge modules call requests.post at call time
+        try:
+            return {**self._call(judge, index), "attempts": attempts[0]}
+        finally:
+            requests.post = original_post
+
+    def _call(self, judge, index):
         start = time.perf_counter()
         if judge == "DAT (GPT-4o-mini)":
             row = self.top1[index]
@@ -112,17 +130,34 @@ class Judges:
         }
 
 
+def setup(dataset):
+    """(judges, output folder, ledger note prefix, cost estimate per question
+    for all three judges) for 'squad' (default, as in step 2.10) or 'nfcorpus'."""
+    if dataset == "squad":
+        return Judges("test"), ROOT / "results", "step 2.10", 0.000110 + 0.000047 + 0.000118
+    from extension.nfcorpus_judges import dat_candidates, jev_candidates
+    set_name = "nfcorpus-test"
+    judges = Judges(set_name, top1=dat_candidates(set_name),
+                    topk={1: jev_candidates(set_name, 1), 3: jev_candidates(set_name, 3)})
+    return judges, ROOT / "results" / "nfcorpus", "nfcorpus-test N10", 0.000158 + 0.000062 + 0.000164
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Fair sequential judge latency (step 2.10)")
+    parser = argparse.ArgumentParser(description="Fair sequential judge latency (steps 2.10 and N10)")
     parser.add_argument("--n", type=int, default=100, help="questions to time")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--dataset", choices=["squad", "nfcorpus"], default="squad")
     args = parser.parse_args()
 
-    judges = Judges("test")
+    judges, out_dir, note, per_question = setup(args.dataset)
     sample = random.Random(args.seed).sample(range(len(judges.top1)), args.n + WARMUP)
     warmup, timed = sample[:WARMUP], sample[WARMUP:]
     # Upper-bound estimate from the real runs' mean cost per question, +50% margin.
-    budget.ensure_affordable(len(sample) * (0.000110 + 0.000047 + 0.000118) * 1.5)
+    if args.dataset == "nfcorpus":
+        from extension.nfcorpus import ensure_nfcorpus_budget
+        ensure_nfcorpus_budget(len(sample) * per_question * 1.5)
+    else:
+        budget.ensure_affordable(len(sample) * per_question * 1.5)
 
     spend = {judge: [0, 0, 0.0] for judge in JUDGES}  # calls, tokens, cost
     rows = []
@@ -149,9 +184,10 @@ def main():
             if calls:
                 budget.record("latency_" + judge.split(" (")[0].lower().replace(" ", "_"),
                               judges.dat_model if judge.startswith("DAT") else judges.jev_model,
-                              calls, tokens, cost, note=f"step 2.10 sequential latency, {calls} calls incl. warm-up")
+                              calls, tokens, cost, note=f"{note} sequential latency, {calls} calls incl. warm-up")
 
-    out = ROOT / "results" / "latency_test.csv"
+    out = out_dir / "latency_test.csv"
+    out_dir.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
@@ -170,16 +206,20 @@ def main():
             "mean_ms": statistics.mean(latency), "max_ms": max(latency),
             "usd_per_1000_questions": cost_per_1k,
             "same_as_cached": statistics.mean(r["same_as_cached"] for r in mine),
+            "calls_with_retries": sum(r["attempts"] > 1 for r in mine),
+            "outliers_over_3x_p50": sum(r["latency_ms"] > 3 * percentile(latency, 50) for r in mine),
         }
         summary.append(entry)
         print(f"{judge:<20} {entry['n_ok']:>4} {entry['p50_ms']:>7.0f} {entry['p95_ms']:>7.0f} {entry['mean_ms']:>7.0f} "
-              f"{entry['max_ms']:>7.0f} {cost_per_1k:>8.4f} {entry['same_as_cached']:>15.1%}")
-    with (ROOT / "results" / "latency_summary.csv").open("w", encoding="utf-8", newline="") as handle:
+              f"{entry['max_ms']:>7.0f} {cost_per_1k:>8.4f} {entry['same_as_cached']:>15.1%}  "
+              f"retried {entry['calls_with_retries']}, >3x p50 {entry['outliers_over_3x_p50']}")
+    with (out_dir / "latency_summary.csv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(summary[0]))
         writer.writeheader()
         writer.writerows({k: (f"{v:.4f}" if isinstance(v, float) else v) for k, v in s.items()} for s in summary)
     total = sum(cost for _, _, cost in spend.values())
-    print(f"\nTotal spend for this step: ${total:.4f}. Written to results/latency_test.csv and results/latency_summary.csv")
+    print(f"\nTotal spend for this step: ${total:.4f}. Written to {out.relative_to(ROOT)} and "
+          f"{(out_dir / 'latency_summary.csv').relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
