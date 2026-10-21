@@ -2456,3 +2456,34 @@ Proposed but not done (awaiting approval): article-cluster bootstrap for
 SQuAD (prototype only, in the scratchpad: no P@1 conclusion changes; DAT -
 fixed 0.6 on MRR@20 would touch zero), a Limitations sentence on
 within-article dependence, and the abstract motivation sentence.
+
+### 14.3 Slides (21 Oct 2026)
+
+`slides/JevFusion_slides.pptx`: three content slides as requested, (1)
+the baseline DAT (pipeline diagram, paper and reproduced numbers, DAT's
+stated limitation), (2) our extension (two-lane DAT / JevFusion diagram,
+J1 and J3, RQ1-RQ3), (3) results per dataset (native charts of each
+judge minus the tuned fixed alpha, J1 vs DAT, J3 vs J1 and judge cost
+with 95% CIs). Speaker notes on every slide (what to say, about 2 minutes
+each). All numbers from the paper's tables. Built with pptxgenjs,
+checked with the pptx validator and rendered through PowerPoint.
+The course template (`slides/README.md`) also asks for a cover and a
+references slide; not added (3 slides requested). Committed locally,
+not pushed.
+
+Update (21 Oct 2026): the deck now has 6 slides: a cover (title, the
+three students, instructor Dr. Ahmad Abboud, Faculty of Science, Lebanese
+University; a picture placeholder for the faculty logo, to be inserted in
+PowerPoint), the three content slides, a conclusion (three take-aways and
+next steps) and a thank-you slide. Speaker notes on all six. Still
+without a references slide, which `slides/README.md` asks for.
+
+Update (21 Oct 2026): faculty logo fixed on the cover (the picture
+placeholder had squeezed the wide logo image to about a third of its
+width; now the emblem is cropped from its white margins, shown in its own
+proportions on a white rounded card). The deck saved from PowerPoint on
+the company OneDrive received an encrypting sensitivity label, so the
+committed `slides/JevFusion_slides.pptx` is the unprotected build from
+the generator (same slide texts and notes, checked shape by shape).
+Pushed to `report/paper-pdf` together with `README.md` (slides link) and
+this file.

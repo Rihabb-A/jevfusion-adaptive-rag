@@ -63,7 +63,7 @@ queries; total API spend for the whole project: **$1.71 of the $20 cap**.
 | [`PROGRESS.md`](PROGRESS.md) | Full working log: every step, decision, problem, cost and commit |
 | [`report/paper/JevFusion__Evaluating_a_Specialized_Decision_Model_forCost_Efficient_Adaptive_Hybrid_Retrieval.pdf`](report/paper/JevFusion__Evaluating_a_Specialized_Decision_Model_forCost_Efficient_Adaptive_Hybrid_Retrieval.pdf) | The research paper (ACL format, PDF): *JevFusion: Evaluating a Specialized Decision Model for Cost-Efficient Adaptive Hybrid Retrieval* |
 | [`report/REPORT.md`](report/REPORT.md) | The paper-style report (in preparation) |
-| [`slides/`](slides/README.md) | Defense slides (in preparation) |
+| [`slides/JevFusion_slides.pptx`](slides/JevFusion_slides.pptx) | Defense slides (6 slides, speaker notes on each): cover, baseline, extension, results per dataset, conclusion, thank you |
 | [`data/README.md`](data/README.md) | Datasets, how to obtain them, what is cached |
 
 ## Repository layout
