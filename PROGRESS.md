@@ -79,10 +79,10 @@ paragraphs per retriever instead of top-1.
 | 4 | N9 | Full analysis | done: no judge beats dev-tuned fixed alpha; J1 = DAT at 2.6x lower cost | free |
 | 4 | N10 | Fair latency | done: **J1 0.92 s vs DAT 1.43 s p50; faster on 94%** | $0.039 |
 | 4 | N11 | Root and data READMEs; push `extension/nfcorpus` | done (approved 21 Oct); **NFCorpus PR to open** | free |
-| 3 | 3.1-3.3 (again) | Report, slides, defense with both datasets | **next** | free |
-| 3 | 3.1-3.3 | Report, slides (max 8), defense | to do | free |
+| 3 | P1-P4 | ACL research paper (`report/paper/`) and `report/REPORT.md`, both datasets | done (21 Oct): local commit on `report/paper`; **not pushed, awaiting approval** (§14) | free |
+| 3 | 3.2-3.3 | Slides (max 8), defense | **next** | free |
 
-**Spend so far: $1.383 of $20** (see §8).
+**Spend so far: $1.7144 of $20** (SQuAD $1.383, see §8; NFCorpus $0.3310, see §13.5).
 
 **Headline so far (test set, 2,996 questions):** Jev J1 P@1 **0.8899** vs
 DAT (GPT-4o-mini) 0.8735 vs fixed alpha 0.6 0.8571. Jev J1 beats DAT by
@@ -2318,3 +2318,172 @@ check that no `.env`, dataset or cache file is included, then
 **Next:** the team opens the NFCorpus PR (`main...extension/nfcorpus`),
 reviews and merges it; then Phase 3: `report/REPORT.md` and the slides,
 now covering both datasets.
+
+## 14. Phase 3: research paper (ACL format) and course report (21 Oct 2026)
+
+Branch `report/paper`, created from `extension/nfcorpus` at `3bf1bfa`.
+Writing, table scripts and figure scripts only: no code, data, cache or
+result file was changed, no API was called and no experiment was run.
+Committed locally; **not pushed**, no PR (awaiting approval).
+
+**Step 1 (plan) answers applied.** Title *JevFusion: Evaluating
+Specialized Decision Models for Cost-Efficient Adaptive Hybrid Retrieval*;
+authors Rihab Atwi, Ibrahim Shawraba, Sophie Aoun with affiliation and
+e-mail placeholders marked TODO; the repository is private and not linked
+("Code and results are available on request."); acknowledgments name the
+course *Data Science for Conversational AI*. Conflict fixes: reproduction
+"within 1.2 points on P@1 and MRR@20 and 2.0 points on hybrid-subset
+alpha accuracy"; NFCorpus J1 vs DAT reported descriptively as
+inconclusive (no margin was fixed in advance); exact detection limit per
+comparison (0.96 / 1.18 / 1.22); the Spearman values are stated to cover
+different document sets; Frontier-DAT credited for the gate idea, our
+result framed as evidence for it; latency compared only within a run.
+
+**What was produced (`report/paper/`, see its README):**
+
+| Item | Content |
+|---|---|
+| `main.tex`, `sections/*.tex`, `figures/method.tex` | ACL long paper, `[final]`, official `acl.sty` / `acl_natbib.bst` (acl-org/acl-style-files `d5adc82`, unchanged); Limitations and Ethics after the Conclusion; appendix with prompts, tuning choices, all paired comparisons, judge behavior, latency, reproducibility |
+| `scripts/make_tables.py` | 8 tables (LaTeX + Markdown) generated from `results/`, `results/nfcorpus/` and PROGRESS tables; x100 values rounded once from the raw 4-decimal values (Decimal, half up) |
+| `scripts/make_figures.py` | Figure 2 (fixed-alpha grids on the tuning splits) and Figure 3 (quality vs judge cost), vector PDF + PNG |
+| `scripts/check_numbers.py` | Every number and interval in the paper checked against the sources |
+| `scripts/build_report.py` | Fills the same Markdown tables into `report/REPORT.md` |
+| `references.bib` | 29 entries, all cited, each checked against arXiv, Crossref, OpenAlex, the ACL Anthology, the publisher page or the repository; no VERIFY entries |
+| `main.pdf`, `overleaf_upload.zip` | Compiled paper; Overleaf upload (28 files, compiles on its own) |
+| `requirements.txt` | `matplotlib==3.11.2` (figures only; not added to the project requirements) |
+
+`report/REPORT.md` follows the course template (team, topic, baseline;
+abstract; baseline problem, solution, results; extension motivation,
+method, implementation; reproduction, extension vs baseline, honest
+assessment; related work with the difference to each; limitations and
+full-validation requirements; references), links the PDF at the top and
+uses the generated tables.
+
+**References.** Verified and cited, among others: DAT; QuDAR (ACL 2026);
+MoR (EMNLP 2025); Query Adaptive Rank Fusion (DATA 2026); Query-Adaptive
+Hybrid Search (MAKE 2026); Entropy-Based Dynamic Hybrid Retrieval (ICML
+2025 Workshop on Vector Databases, a workshop paper); UMG-RAG; Wu and Lin
+(2026); RetrievalRouter; Adaptive-RAG; Frontier-DAT (GitHub code
+repository, cited as such). Each is cited only for what its abstract or
+README states. Not cited (abstracts not readable), listed only in
+`report/paper/README.md`: RCT-MARS, The Fusion Tax and four other papers
+that cite DAT.
+
+**Checks.**
+- Tectonic 0.17.0 (XeTeX), run from the scratchpad: no errors, no
+  undefined references or citations, no overfull boxes. The tables were
+  made to fit (two-line headers, short judge names, median latency only in
+  the main tables, with p95 in Appendix Table 8; in `acl.sty`, `\small`
+  and `\footnotesize` are both 9 pt).
+- Pages: the main content (Introduction to Conclusion) ends on **page 8,
+  left column**, about 1.6 columns under the 8-page limit; 12 pages in
+  total. Overleaf uses pdfLaTeX and may break pages slightly differently.
+- Words: abstract 176; Introduction to Conclusion 4,670 (with tables and
+  captions); whole PDF 7,535.
+- `check_numbers.py`: 1,436 numbers in 28 files (text, LaTeX and Markdown
+  tables) and every interval match the sources; REPORT.md: 349 numbers,
+  all matched. A test file with 9 planted errors was caught on 8; the miss
+  was a value that occurs elsewhere in the sources (stated as a limitation
+  in the paper's README).
+- All 16 sentences about significance were re-read: each "significant" has
+  an interval excluding zero; each "not significant / inconclusive" an
+  interval containing zero; every interval has the sign of its difference
+  (J3 - J1 on NFCorpus is recorded directly in §12 N8).
+
+**Documentation fixes (same branch).** `extension/NFCORPUS.md`: exact
+detection limits (0.96 / 1.18 / 1.22) instead of "1.0-1.2", and
+"inconclusive" instead of "statistically indistinguishable";
+`extension/README.md`: status line now $1.7144 for both datasets, §9
+"One dataset" replaced by the two-dataset limitation; `baseline/README.md`
+and `README.md`: precise reproduction wording; `README.md`: NFCorpus RQ1
+as inconclusive.
+
+**Open items before submission:** affiliation and e-mail placeholders
+(TODO in `main.tex`); any affiliation with or support from TypeSafe,
+OpenAI or OpenRouter (TODO in `sections/10_ethics.tex`); the two
+teammates' GitHub handles (TODO in `report/REPORT.md`); a page-count check
+once on Overleaf.
+
+**Cost:** $0. **Project total:** $1.7144 of $20.
+
+**Next:** review the PDF; approve the push of `report/paper` (and a PR);
+then the slides (max 8) and the defense.
+
+### 14.1 Paper revision (21 Oct 2026, same branch)
+
+Done (writing only; no code, data or result changes, no API calls, $0):
+- **Figure 1** redrawn as two lanes (DAT left, JevFusion right) between a
+  shared retrieval box and shared Eq. 2 + fusion boxes; only the differing
+  boxes (judge, answer to integers) are shaded; an illustrative example on
+  the arrows (S_D = 5, S_B = 2 gives alpha = 1); caption updated.
+- **Title:** "Models" to "a ... Model" (Jev is the only specialized
+  decision model evaluated).
+- **Authors:** Faculty of Science, Lebanese University, Beirut, Lebanon;
+  e-mails filled in (placeholders removed).
+- **Abstract** shortened to the three main findings (134 words).
+- **Statistics:** states that no multiple-comparison correction was applied.
+- **Related Work and Limitations:** cross-encoder reranking (Nogueira and
+  Cho, 2019, arXiv:1901.04085, verified) as an alternative a deployment
+  could use.
+- **Reference check:** every entry re-checked against Crossref or arXiv:
+  all titles and authors match except `posokhov2026qahs` (Crossref: fifth
+  author "Olesia Koroteeva"; entry: "Olesia V. Makhnytkina"), flagged and
+  not changed.
+
+Not done (need new evaluation code, and for the interface ablation paid
+API calls; awaiting a decision): gate and tie-to-tuned experiments, the
+GPT-4o-mini logprob "DAT-argmax" ablation, and the text that depends on
+them.
+
+Checks: compiles with no errors, undefined references or overfull boxes;
+main content still ends on page 8 (left column); `check_numbers.py`
+passes (1,435 numbers).
+
+### 14.2 Push of the final paper PDF (21 Oct 2026)
+
+The paper was compiled on Overleaf (pdfLaTeX) from `overleaf_upload.zip`:
+11 pages, Conclusion on page 7, Limitations from page 8 (within the
+8-page limit). By decision, only the Overleaf PDF
+(`report/paper/JevFusion__Evaluating_a_Specialized_Decision_Model_forCost_Efficient_Adaptive_Hybrid_Retrieval.pdf`)
+and the updated documentation (`README.md`, `baseline/README.md`,
+`extension/README.md`, `extension/NFCORPUS.md`, `PROGRESS.md`) are pushed,
+on branch `report/paper-pdf` (from `extension/nfcorpus`, `3bf1bfa`). The
+LaTeX sources, table/figure/check scripts, `main.pdf`,
+`overleaf_upload.zip` and the filled-in `report/REPORT.md` stay on the
+local branch `report/paper` and are not pushed.
+
+Proposed but not done (awaiting approval): article-cluster bootstrap for
+SQuAD (prototype only, in the scratchpad: no P@1 conclusion changes; DAT -
+fixed 0.6 on MRR@20 would touch zero), a Limitations sentence on
+within-article dependence, and the abstract motivation sentence.
+
+### 14.3 Slides (21 Oct 2026)
+
+`slides/JevFusion_slides.pptx`: three content slides as requested, (1)
+the baseline DAT (pipeline diagram, paper and reproduced numbers, DAT's
+stated limitation), (2) our extension (two-lane DAT / JevFusion diagram,
+J1 and J3, RQ1-RQ3), (3) results per dataset (native charts of each
+judge minus the tuned fixed alpha, J1 vs DAT, J3 vs J1 and judge cost
+with 95% CIs). Speaker notes on every slide (what to say, about 2 minutes
+each). All numbers from the paper's tables. Built with pptxgenjs,
+checked with the pptx validator and rendered through PowerPoint.
+The course template (`slides/README.md`) also asks for a cover and a
+references slide; not added (3 slides requested). Committed locally,
+not pushed.
+
+Update (21 Oct 2026): the deck now has 6 slides: a cover (title, the
+three students, instructor Dr. Ahmad Abboud, Faculty of Science, Lebanese
+University; a picture placeholder for the faculty logo, to be inserted in
+PowerPoint), the three content slides, a conclusion (three take-aways and
+next steps) and a thank-you slide. Speaker notes on all six. Still
+without a references slide, which `slides/README.md` asks for.
+
+Update (21 Oct 2026): faculty logo fixed on the cover (the picture
+placeholder had squeezed the wide logo image to about a third of its
+width; now the emblem is cropped from its white margins, shown in its own
+proportions on a white rounded card). The deck saved from PowerPoint on
+the company OneDrive received an encrypting sensitivity label, so the
+committed `slides/JevFusion_slides.pptx` is the unprotected build from
+the generator (same slide texts and notes, checked shape by shape).
+Pushed to `report/paper-pdf` together with `README.md` (slides link) and
+this file.

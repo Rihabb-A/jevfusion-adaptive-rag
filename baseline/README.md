@@ -12,7 +12,8 @@ is our own implementation of the method as the paper specifies it
 that lives in `extension/`.
 
 **Status:** full run on SQuAD (not a smoke test). DAT with GPT-4o-mini
-reproduces within about one point of the paper on every reported metric,
+reproduces the paper within 1.2 points on P@1 and MRR@20 and within 2.0
+points on hybrid-subset alpha accuracy (all metrics in the tables below),
 and its gain over fixed-weight fusion is statistically significant. We
 label it a **DAT-style reproduction** because our random article sample
 differs from the authors' (they published no seed); see

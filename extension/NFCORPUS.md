@@ -6,8 +6,8 @@ with **many relevant documents per query, graded labels and short topical
 queries**?
 
 **Short answer:** partly. Jev keeps its **cost and speed advantage** (2.6x
-cheaper than DAT, faster on 94% of queries) at **statistically
-indistinguishable quality**; the **top-3
+cheaper than DAT, faster on 94% of queries) with **no significant quality
+difference (inconclusive at 323 queries)**; the **top-3
 penalty disappears**, but top-3 brings no gain; and **no judge beats a
 fixed fusion weight tuned on NFCorpus's dev split**, so the SQuAD result
 "adaptive judges beat fixed fusion" does not generalize.
@@ -82,10 +82,12 @@ in `results/nfcorpus/paired_comparisons.csv`):
 | DAT - dense only | -0.0100 [-0.0218, +0.0021] | not significant |
 | Jev J3 - dense only | -0.0062 [-0.0172, +0.0048] | not significant |
 
-**Statistical power:** with 323 queries, nDCG@10 differences below about
-**1.0-1.2 points** between the judges cannot be reliably detected (80%
-power). Non-significant differences here are **inconclusive, not proof of
-equality**.
+**Statistical power:** with 323 queries, the smallest nDCG@10 difference
+between judges that can be detected with 80% power (5% level) is **0.96
+points** (J1 vs J3), **1.18** (J1 vs DAT) and **1.22** (J3 vs DAT);
+column `ndcg@10_mde_80pct_power` of `results/nfcorpus/paired_comparisons.csv`
+gives it for every comparison. Non-significant differences here are
+**inconclusive, not proof of equality**.
 
 **Headroom:** choosing the best grid alpha per query with knowledge of the
 labels (an upper bound, not a method) would reach nDCG@10 0.4622, +3.7
@@ -181,7 +183,7 @@ repeats its own levels on 89% of queries (SQuAD: 95%), DAT on 96%.
 
 ## 7. Limitations and threats to validity
 
-- 323 test queries (detection limit about 1 nDCG point between judges).
+- 323 test queries (detection limit 0.96-1.22 nDCG@10 points between judges).
 - Incomplete, citation-based labels; unjudged documents count as not
   relevant, which may penalize judges that find relevant unlabeled
   documents.
