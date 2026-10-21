@@ -10,9 +10,10 @@ calls into it rather than copying it: same corpus, same retrieval scores,
 same fusion, same metrics, same budget ledger. Only the judge and the way
 its judgments become a fusion weight are new.
 
-**Status:** full runs on our complete SQuAD test set (2,996 questions),
-not a smoke test. Total API spend for the whole project: **$1.38 of the
-$20 cap.**
+**Status:** full runs on our complete SQuAD test set (2,996 questions)
+and on BEIR NFCorpus (323 test queries, §11), not smoke tests. Total API
+spend for the whole project, both datasets: **$1.7144 of the $20 cap**
+(SQuAD $1.383, §10; NFCorpus $0.3310, [`NFCORPUS.md`](NFCORPUS.md) §9).
 
 ## Headline result
 
@@ -319,15 +320,15 @@ Run times are with 8 parallel requests and vary with API load.
 
 ## 9. Limitations and what full validation would require
 
-- **One dataset.** SQuAD is English and has a single gold paragraph per
-  question. The J3 result in particular may not transfer to benchmarks
-  where several documents per query are relevant (for example BEIR
-  NFCorpus or FiQA), and J1's advantage needs checking on other domains
-  and on the paper's second dataset, DRCD (Chinese). Full validation
-  would mean repeating the baseline and steps 1-11 per dataset (about
-  $1.30-1.70 of API cost per dataset with ~3,000-question tune and test
-  sets: embeddings, DAT, J1 and J3 at current prices) plus adapting the
-  metrics to graded, multi-document relevance labels.
+- **Two English datasets.** SQuAD has a single gold paragraph per
+  question; BEIR NFCorpus (§11, [`NFCORPUS.md`](NFCORPUS.md)) has many
+  graded relevant documents per query. The second dataset changed two
+  conclusions: J1's advantage over DAT is inconclusive there, and the J3
+  penalty disappears. Other domains (for example FiQA) and the paper's
+  second dataset, DRCD (Chinese), remain untested. Each further dataset
+  means repeating the pipeline: about $1.30-1.70 of API cost with
+  ~3,000-question tune and test sets like SQuAD's (embeddings, DAT, J1
+  and J3 at current prices); NFCorpus cost $0.3310.
 - **J1 changes interface as well as model** (§3); we did not separate the
   two effects.
 - **Prompts and rubric not optimized** for either judge; both use DAT's
